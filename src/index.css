@@ -1,0 +1,67 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer utilities {
+  @keyframes slideIn {
+    from {
+      transform: translateX(100%);
+      opacity: 0;
+    }
+    to {
+      transform: translateX(0);
+      opacity: 1;
+    }
+  }
+
+  .animate-slideIn {
+    animation: slideIn 0.3s ease-out;
+  }
+}
+
+:root {
+  /* Base colors - only these map to tenant properties */
+  --sdk-primary-color: #4300b1;
+  --sdk-secondary-color: #7d6ea4;
+  --sdk-accent-color: #f55959;
+  --sdk-text-primary-color: #000000;
+  --sdk-text-secondary-color: #666666;
+
+  /* Derived colors - automatically calculated, not in tenant model */
+  --sdk-primary-light: color-mix(in srgb, var(--sdk-primary-color) 85%, white);
+  --sdk-primary-dark: color-mix(in srgb, var(--sdk-primary-color) 85%, black);
+  --sdk-secondary-light: color-mix(
+    in srgb,
+    var(--sdk-secondary-color) 85%,
+    white
+  );
+  --sdk-secondary-dark: color-mix(
+    in srgb,
+    var(--sdk-secondary-color) 85%,
+    black
+  );
+
+  /* System defaults - not in tenant model */
+  --sdk-bg-primary-color: #ffffff;
+  --sdk-bg-secondary-color: #f5f5f5;
+  --sdk-danger-color: var(--sdk-accent-color);
+}
+
+.dark {
+  --sdk-text-primary-color: #ffffff;
+  --sdk-text-secondary-color: #cccccc;
+  --sdk-bg-primary-color: #0e1218;
+  --sdk-bg-secondary-color: #1c2025;
+
+  /* Adjust derived colors for dark mode */
+  --sdk-primary-light: color-mix(in srgb, var(--sdk-primary-color) 70%, white);
+  --sdk-secondary-light: color-mix(
+    in srgb,
+    var(--sdk-secondary-color) 70%,
+    white
+  );
+}
+
+/* body {
+  background-color: #050505;
+} */
