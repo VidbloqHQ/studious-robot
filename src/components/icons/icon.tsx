@@ -17,6 +17,7 @@ interface IconData {
   fill?: string;
   type?: "stroke" | "fill" | "hybrid"; // Add type to distinguish between stroke and fill icons
   strokes?: string[];
+  opacity?: number[];
 }
 
 export const Icon: React.FC<IconProps> = ({
@@ -66,11 +67,13 @@ export const Icon: React.FC<IconProps> = ({
       {paths.map((d, index) => {
         if (type === 'fill') {
           // For fill-type icons
+          const opacity = iconData.opacity?.[index];
           return (
             <path
               key={index}
               d={d}
               fill={fill || iconFill?.[index] || color || resolvedFill}
+              opacity={opacity}
             />
           );
         } else if (type === 'hybrid') {

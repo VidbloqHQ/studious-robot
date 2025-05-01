@@ -20,7 +20,7 @@ const StreamView = ({ children }: StreamViewProps) => {
     <>
       <LiveKitRoom
         audio={finalAudioEnabled ?? false}
-        video={finalVideoEnabled ?? false}
+        video={finalVideoEnabled ?? true}
         token={token}
         serverUrl="wss://streamlink-vtdavgse.livekit.cloud"
         className="relative h-screen overflow-x-hidden w-screen flex flex-col"

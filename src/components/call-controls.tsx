@@ -61,8 +61,9 @@
 //       toggleRecording
 //     } = props;
 
+//     console.log({isMicEnabled, isCameraEnabled, isScreenSharingEnabled, isRecording});
 //     return (
-//       <div className="w-full max-w-6xl mx-auto" style={style}>
+//       <div className={`w-full max-6xl mx-auto ${className}`} style={style}>
 //         <div className="flex items-center justify-between">
 //           {/* Left group - Link and Menu icons */}
 //           <div className="bg-[#F2EFFE] rounded-full py-2 px-3 flex items-center space-x-2">
@@ -296,10 +297,13 @@
 
 // export default CallControls;
 
+import React from 'react';
 import { Track } from "livekit-client";
 import { TrackToggle } from "@livekit/components-react";
 import BaseCallControls, { CallControlsRenderProps } from './base-call-controls';
 import { Icon } from "./icons";
+import CameraButton from './camera-button-fix'; // Import our fixed camera button
+import { isIOSBrowser } from '../utils/ios-direct-fix'; // Import the iOS detection function
 
 export type CallControlsProps = {
   className?: string;
@@ -326,7 +330,7 @@ export type CallControlsProps = {
 
 /**
  * CallControls provides a customizable UI for stream call controls
- * Uses the BaseCallControls headless component for functionality
+ * Updated with iOS Chrome camera fix
  */
 const CallControls: React.FC<CallControlsProps> = ({
   className = "",
@@ -340,6 +344,9 @@ const CallControls: React.FC<CallControlsProps> = ({
   onReactionsToggle,
   onRecordToggle,
 }) => {
+  // Check if we're on iOS once during initialization
+  const isIOS = React.useMemo(() => isIOSBrowser(), []);
+
   // Render the modern UI design from call-controlz
   const renderCallControls = (props: CallControlsRenderProps) => {
     const {
@@ -359,6 +366,7 @@ const CallControls: React.FC<CallControlsProps> = ({
       toggleRecording
     } = props;
 
+    console.log({isMicEnabled, isCameraEnabled, isScreenSharingEnabled, isRecording});
     return (
       <div className={`w-full max-6xl mx-auto ${className}`} style={style}>
         <div className="flex items-center justify-between">
@@ -475,33 +483,42 @@ const CallControls: React.FC<CallControlsProps> = ({
               </TrackToggle>
             )}
 
-            {/* Camera */}
+            {/* Camera - Using our iOS-compatible camera button when needed */}
             {canAccessMediaControls && (
-              <TrackToggle
-                source={Track.Source.Camera}
-                showIcon={false}
-              >
-                <div className="bg-white flex flex-row items-center justify-between p-0.5 rounded-2xl gap-x-2">
-                  {components?.CameraButton ? (
-                    <components.CameraButton enabled={isCameraEnabled} toggle={toggleCamera} />
-                  ) : (
-                    <>
-                      <Icon name="circle" className="text-[#F5F5F5]" size={12} />
-                      {isCameraEnabled ? (
-                        <div className="bg-primary p-2 rounded-xl">
-                          <Icon name="video" className="text-white" />
-                        </div>
-                      ) : (
-                        <div className="bg-[#F5F5F5] p-2 rounded-xl">
-                          <Icon name="videoOff" className="text-white" />
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
-              </TrackToggle>
+              isIOS ? (
+                // For iOS Chrome, use our special camera button
+                <CameraButton 
+                  enabled={isCameraEnabled} 
+                  toggle={toggleCamera} 
+                />
+              ) : (
+                // For other browsers, use the standard controls
+                <TrackToggle
+                  source={Track.Source.Camera}
+                  showIcon={false}
+                >
+                  <div className="bg-white flex flex-row items-center justify-between p-0.5 rounded-2xl gap-x-2">
+                    {components?.CameraButton ? (
+                      <components.CameraButton enabled={isCameraEnabled} toggle={toggleCamera} />
+                    ) : (
+                      <>
+                        <Icon name="circle" className="text-[#F5F5F5]" size={12} />
+                        {isCameraEnabled ? (
+                          <div className="bg-primary p-2 rounded-xl">
+                            <Icon name="video" className="text-white" />
+                          </div>
+                        ) : (
+                          <div className="bg-[#F5F5F5] p-2 rounded-xl">
+                            <Icon name="videoOff" className="text-white" />
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </TrackToggle>
+              )
             )}
-
+            
             {/* Reactions */}
             <div 
               className="bg-white p-0.5 rounded-2xl cursor-pointer h-[44px] w-[44px]"

@@ -16,13 +16,9 @@ interface LivestreamViewProps {
   style?: React.CSSProperties;
 }
 
-// Create proper index signature for participant types
-// type ParticipantsByType = {
-//   [key: string]: ParticipantTrack[];
-// };
 
 export default function LivestreamView({
-  hasAgenda = true,
+  hasAgenda = false,
   className = "",
   style,
 }: LivestreamViewProps) {
@@ -54,10 +50,10 @@ export default function LivestreamView({
     const userName = metadata.userName || track.participant.identity;
     const userType = metadata.userType || "guest";
 
-    // Determine classes based on size
+    // Determine classes based on size bg-green-900 border-red-500 border-4
     const containerClasses =
       size === "large"
-        ? "border-red-500 border-4 relative rounded-lg overflow-hidden bg-green-900 h-full w-full"
+        ? "relative rounded-lg overflow-hidden h-full w-full bg-purple-900"
         : "relative rounded-lg overflow-hidden bg-purple-900 h-full w-full";
 
     return (
@@ -191,27 +187,35 @@ export default function LivestreamView({
     );
   };
 
+  const isWindowShare =
+    screenShareTrack?.source === Track.Source.ScreenShare &&
+    !screenShareTrack?.publication?.dimensions?.width;
+
   return (
-    <div className={`relative w-full h-full ${className}`} style={style}>
+    <div className={`w-full h-full ${className}`} style={style}>
       {screenShareTrack ? (
-        // SCREEN SHARING LAYOUT WITH POSSIBLE AGENDA
-        <div className="flex h-full">
-          {/* Main content - screen share (full width if no sidebar content and no agenda) */}
+        // SCREEN SHARING LAYOUT
+        <div className="h-full flex">
+          {/* Main content - screen share */}
           <div
-            className={`flex-col ${
-              !sidebarContent.length && !hasAgenda ? "w-full" : "flex-grow"
-            } h-full`}
+            className="h-full relative"
+            style={{
+              width:
+                !hasAgenda && (!sidebarContent.length || !isWindowShare)
+                  ? "100%"
+                  : "calc(100% - 320px)",
+            }}
           >
-            <div className="relative h-full">
+            <div className="w-full h-full">
               {mainContent && renderParticipant(mainContent, "large")}
 
-              {/* Camera view of the screen sharer on top of the main grid */}
+              {/* Camera view of screen sharer */}
               {rawTracks.find(
                 (track) =>
                   track.source === Track.Source.Camera &&
                   track.participant?.identity === screenSharerIdentity
               ) && (
-                <div className="absolute left-4 bottom-4 w-64 h-36">
+                <div className="absolute left-4 bottom-4 w-64 h-36 z-10">
                   {renderParticipant(
                     rawTracks.find(
                       (track) =>
@@ -225,99 +229,72 @@ export default function LivestreamView({
             </div>
           </div>
 
-          {/* Only show sidebar if there's content or agenda */}
-          {(sidebarContent.length > 0 || hasAgenda) && (
-            <div className="w-80 h-full flex flex-col">
-              {/* If there's an agenda and screen is shared, co-hosts are displayed horizontally at the top */}
-              {hasAgenda && sidebarContent.length > 0 && (
-                <div className="mb-3">
-                  <div className="flex gap-3 overflow-x-auto pb-2">
-                    {sidebarContent.map((track, index) => (
-                      <div
-                        key={`sidebar-${index}`}
-                        className="w-64 h-36 flex-shrink-0"
-                      >
-                        {renderParticipant(track, "small")}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* If no agenda with screen share, display co-hosts vertically */}
-              {!hasAgenda && sidebarContent.length > 0 && (
-                <div className="flex flex-col gap-3 flex-grow">
-                  {sidebarContent.map((track, index) => (
-                    <div key={`sidebar-${index}`} className="h-32">
-                      {renderParticipant(track, "small")}
+          {/* Sidebar - Only show if needed */}
+          {(hasAgenda || (sidebarContent.length > 0 && !isWindowShare)) && (
+            <div className="w-80 ml-3 h-full flex flex-col">
+              {sidebarContent.length > 0 && (
+                <div className={hasAgenda ? "mb-3" : "h-full"}>
+                  {hasAgenda ? (
+                    // Horizontal layout with agenda
+                    <div className="flex gap-3 overflow-x-auto">
+                      {sidebarContent.map((track, index) => (
+                        <div
+                          key={`sidebar-${index}`}
+                          className="w-64 h-36 flex-shrink-0"
+                        >
+                          {renderParticipant(track, "small")}
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  ) : (
+                    // Vertical layout without agenda
+                    <div className="flex flex-col gap-3">
+                      {sidebarContent.map((track, index) => (
+                        <div key={`sidebar-${index}`} className="h-32">
+                          {renderParticipant(track, "small")}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
-
-              {/* Agenda section - takes remaining space when screen is shared */}
-              {hasAgenda && <div className="flex-grow">{renderAgenda()}</div>}
+              {hasAgenda && <div className="flex-1">{renderAgenda()}</div>}
             </div>
           )}
         </div>
       ) : (
         // REGULAR LAYOUT - NO SCREEN SHARING
         <div className="h-full flex">
-          {/* If agenda exists with no screen share, it takes the whole right side */}
-          {hasAgenda ? (
-            <div className="flex h-full w-full">
-              {/* Main content - left side with host */}
-              <div className="flex-grow h-full relative">
-                {mainContent ? (
-                  renderParticipant(mainContent, "large")
-                ) : (
-                  <div className="flex items-center justify-center h-full bg-purple-900 rounded-lg">
-                    <p className="text-white text-lg">No host present</p>
-                  </div>
-                )}
-
-                {/* Co-hosts - positioned absolutely on the LEFT side when no screen sharing */}
-                {sidebarContent.length > 0 && (
-                  <div className="absolute left-4 top-4 w-80 space-y-3">
-                    {sidebarContent.map((track, index) => (
-                      <div key={`sidebar-${index}`} className="h-36">
-                        {renderParticipant(track, "small")}
-                      </div>
-                    ))}
-                  </div>
-                )}
+          {/* Main content area */}
+          <div className={`h-full relative ${hasAgenda ? "flex-1" : "w-full"}`}>
+            {mainContent ? (
+              <div className="h-full w-full">
+                {renderParticipant(mainContent, "large")}
               </div>
+            ) : (
+              <div className="flex items-center justify-center h-full bg-purple-900 rounded-lg">
+                <p className="text-white text-lg">No host present</p>
+              </div>
+            )}
 
-              {/* Agenda - right side */}
-              <div className="w-80 h-full ml-3">{renderAgenda()}</div>
-            </div>
-          ) : (
-            // No agenda, just host and co-hosts
-            <div className="h-full relative w-full">
-              {mainContent ? (
-                renderParticipant(mainContent, "large")
-              ) : (
-                <div className="flex items-center justify-center h-full bg-red-900 rounded-lg">
-                  <p className="text-white text-lg">No host present</p>
-                </div>
-              )}
+            {/* Co-hosts overlay */}
+            {sidebarContent.length > 0 && (
+              <div className="absolute left-4 top-4 w-80 space-y-3 z-10">
+                {sidebarContent.map((track, index) => (
+                  <div key={`sidebar-${index}`} className="h-36">
+                    {renderParticipant(track, "small")}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
 
-              {/* Co-hosts - positioned absolutely on the LEFT side when no screen sharing */}
-              {sidebarContent.length > 0 && (
-                <div className="absolute left-4 top-4 w-80 space-y-3">
-                  {sidebarContent.map((track, index) => (
-                    <div key={`sidebar-${index}`} className="h-36">
-                      {renderParticipant(track, "small")}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+          {/* Agenda sidebar */}
+          {hasAgenda && (
+            <div className="w-80 h-full ml-3">{renderAgenda()}</div>
           )}
         </div>
       )}
     </div>
   );
 }
-
-

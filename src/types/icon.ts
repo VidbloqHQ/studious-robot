@@ -3,6 +3,7 @@ export type IconPath = {
   paths: string[];
   fill?: string[]; 
   strokes?: string[];
+  opacity?: number[];
   type?: 'stroke' | 'fill' | 'hybrid';
 };
 
@@ -36,6 +37,9 @@ export type IconName =
   | "circle"
   | "videoOff"
   | "audioOff"
+  | "signal"
+  | "edit"
+  | "moneyTransfer"
   | "link";
 
 export type IconPathsType = {
