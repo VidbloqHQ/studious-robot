@@ -1,8 +1,10 @@
-[build]
-  command = "npm run build"  # or "yarn build" if you use Yarn
-  publish = "dist"           # This should match your build output directory
+# netlify.toml - Configuration file for Netlify deployment
 
-# This redirects all routes to index.html for single-page applications
+[build]
+  publish = "dist"
+  command = "npm run build"
+
+# This ensures all routes work with a single-page application (SPA)
 [[redirects]]
   from = "/*"
   to = "/index.html"

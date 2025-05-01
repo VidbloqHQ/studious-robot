@@ -10,7 +10,7 @@
   ],
   "scripts": {
     "dev": "vite",
-    "build": "tsup",
+    "build": "tsc && vite build",
     "lint": "eslint .",
     "preview": "vite preview"
   },

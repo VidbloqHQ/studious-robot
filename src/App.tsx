@@ -6,7 +6,7 @@ import { isIOSBrowser } from "./utils/ios-direct-fix";
 // import SolanaWalletSetter from "./components/SolanaWalletSetter";
 // import TestingHooks from "./components/TestingHooks";
 // import CallControlz from "./components/call-controlz"; ki5-kcd-n8v
-// import WebSocketTest from "./components/websockettest"; xu0-7sx-hoz
+// import WebSocketTest from "./components/websockettest"; xu0-7sx-hoz     // "build": "tsup",
 
 function App() {
   const showDebug = isIOSBrowser();
