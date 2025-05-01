@@ -297,13 +297,13 @@
 
 // export default CallControls;
 
-import React from 'react';
+import React from "react";
 import { Track } from "livekit-client";
 import { TrackToggle } from "@livekit/components-react";
 import BaseCallControls, { CallControlsRenderProps } from './base-call-controls';
 import { Icon } from "./icons";
-import CameraButton from './camera-button-fix'; // Import our fixed camera button
-import { isIOSBrowser } from '../utils/ios-direct-fix'; // Import the iOS detection function
+import CameraToggleButton from './camera-toggle-patch';
+import { isIOSBrowser } from '../utils/ios-direct-fix';
 
 export type CallControlsProps = {
   className?: string;
@@ -330,7 +330,7 @@ export type CallControlsProps = {
 
 /**
  * CallControls provides a customizable UI for stream call controls
- * Updated with iOS Chrome camera fix
+ * Uses the BaseCallControls headless component for functionality
  */
 const CallControls: React.FC<CallControlsProps> = ({
   className = "",
@@ -344,8 +344,8 @@ const CallControls: React.FC<CallControlsProps> = ({
   onReactionsToggle,
   onRecordToggle,
 }) => {
-  // Check if we're on iOS once during initialization
-  const isIOS = React.useMemo(() => isIOSBrowser(), []);
+  // Check if we're on a mobile device (iOS or Android)
+  const isMobileDevice = isIOSBrowser() || /Android|webOS|Mobile|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
   // Render the modern UI design from call-controlz
   const renderCallControls = (props: CallControlsRenderProps) => {
@@ -483,16 +483,16 @@ const CallControls: React.FC<CallControlsProps> = ({
               </TrackToggle>
             )}
 
-            {/* Camera - Using our iOS-compatible camera button when needed */}
+            {/* Camera - Using enhanced camera toggle for mobile devices */}
             {canAccessMediaControls && (
-              isIOS ? (
-                // For iOS Chrome, use our special camera button
-                <CameraButton 
+              isMobileDevice ? (
+                // Use our enhanced CameraToggleButton for mobile devices
+                <CameraToggleButton 
                   enabled={isCameraEnabled} 
                   toggle={toggleCamera} 
                 />
               ) : (
-                // For other browsers, use the standard controls
+                // Use standard TrackToggle for desktop
                 <TrackToggle
                   source={Track.Source.Camera}
                   showIcon={false}

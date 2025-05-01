@@ -1,114 +1,179 @@
 import React, { useState, useEffect } from 'react';
-import { Track } from "livekit-client";
-import { TrackToggle } from "@livekit/components-react";
-import { useCameraSwitch } from '../hooks/useCameraSwitch'; // Import our enhanced hook
-import { Icon } from "./icons";
+import { useCameraSwitch } from '../hooks/reliable-camera-switch';
+import { Icon } from './icons';
+
+// Define the props interface
+interface CameraToggleButtonProps {
+  enabled: boolean;
+  toggle: () => void;
+}
 
 /**
- * Enhanced Camera Toggle component that works on iOS
+ * Enhanced camera button with more reliable switching for mobile devices
  */
-const CameraToggleButton = ({ enabled, toggle }) => {
-  const { switchCamera, enableCamera, error, isLoading } = useCameraSwitch();
-  const [cameraEnabled, setCameraEnabled] = useState(enabled);
-  const [showSwitchButton, setShowSwitchButton] = useState(false);
-
-  // Update local state when prop changes
+const CameraToggleButton: React.FC<CameraToggleButtonProps> = ({ enabled, toggle }) => {
+  const { 
+    switchCamera, 
+    isLoading, 
+    error, 
+    isFrontCamera,
+    availableCameras
+  } = useCameraSwitch();
+  
+  const [buttonDisabled, setButtonDisabled] = useState<boolean>(false);
+  const [lastToggleTime, setLastToggleTime] = useState<number>(0);
+  const [retryCount, setRetryCount] = useState<number>(0);
+  const [showErrorMessage, setShowErrorMessage] = useState<boolean>(false);
+  
+  // Reset error message after timeout
   useEffect(() => {
-    setCameraEnabled(enabled);
-    // Only show the switch button when the camera is enabled
-    setShowSwitchButton(enabled);
-  }, [enabled]);
-
-  // Handle camera toggle with better iOS support
-  const handleCameraToggle = async () => {
+    let timer: NodeJS.Timeout | undefined;
+    
+    if (error) {
+      setShowErrorMessage(true);
+      timer = setTimeout(() => setShowErrorMessage(false), 3000);
+    }
+    
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [error]);
+  
+  // Handle camera switching with debounce and retry logic
+  const handleCameraSwitch = async () => {
+    const now = Date.now();
+    
+    // Prevent rapid clicks (debounce of 1.5 seconds)
+    if (now - lastToggleTime < 1500 || buttonDisabled) {
+      return;
+    }
+    
+    setButtonDisabled(true);
+    setLastToggleTime(now);
+    
     try {
-      if (!cameraEnabled) {
-        // If camera is off, try to enable it
-        await enableCamera();
+      // Actual camera switching
+      await switchCamera();
+      
+      // Reset retry count on success
+      setRetryCount(0);
+    } catch (err) {
+      console.error('Error in camera switch button:', err);
+      
+      // Increment retry count
+      setRetryCount(prev => prev + 1);
+      
+      // After multiple retries, try toggling camera on/off first
+      if (retryCount >= 2 && enabled) {
+        try {
+          // Toggle off
+          toggle();
+          
+          // Wait a bit, then toggle back on
+          setTimeout(() => {
+            toggle();
+            
+            // After toggling back on, try switching again
+            setTimeout(() => {
+              switchCamera();
+            }, 700);
+          }, 700);
+        } catch (toggleErr) {
+          console.error('Error during camera toggle retry:', toggleErr);
+        }
       }
-      // Call the original toggle function
+    } finally {
+      // Re-enable button after a delay
+      setTimeout(() => {
+        setButtonDisabled(false);
+      }, 1500); // Matches debounce time
+    }
+  };
+  
+  // Handle main camera toggle
+  const handleCameraToggle = async () => {
+    // Don't allow toggling while switching
+    if (isLoading || buttonDisabled) return;
+    
+    try {
+      // Toggle camera on/off
       toggle();
-      setCameraEnabled(!cameraEnabled);
-      // Only show switch button when camera becomes enabled
-      setShowSwitchButton(!cameraEnabled);
+      
+      // On mobile, if turning on camera and multiple cameras available,
+      // we can pre-set whether it's front or back
+      if (!enabled && availableCameras.length >= 2) {
+        // Give time for camera to initialize before switch
+        setTimeout(() => {
+          // Only trigger if not already the correct camera
+          if (isFrontCamera !== true) {
+            switchCamera();
+          }
+        }, 500);
+      }
     } catch (err) {
       console.error('Error toggling camera:', err);
     }
   };
-
+  
   return (
-    <>
+    <div className="relative">
       <div className="bg-white flex flex-row items-center justify-between p-0.5 rounded-2xl gap-x-2">
-        {showSwitchButton && (
+        {/* Camera switch button - only show when camera is on */}
+        {enabled && (
           <button 
-            className="bg-[#F5F5F5] p-1 rounded-xl"
-            onClick={(e) => {
-              e.stopPropagation(); // Prevent triggering toggle
-              switchCamera();
+            onClick={handleCameraSwitch}
+            disabled={isLoading || buttonDisabled}
+            className={`bg-gray-100 p-1.5 rounded-xl ${
+              isLoading || buttonDisabled ? 'opacity-50' : 'hover:bg-gray-200'
+            }`}
+            style={{ 
+              minWidth: '28px', 
+              minHeight: '28px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transition: 'all 0.2s'
             }}
-            disabled={isLoading}
+            title={`Switch to ${isFrontCamera ? 'back' : 'front'} camera`}
           >
-            <Icon name="usdt" className="text-primary" size={12} />
+            {isLoading ? (
+              <Icon name="usdt" className="text-primary animate-spin" size={16} />
+            ) : (
+              <Icon name="Poll" className="text-primary" size={16} />
+            )}
           </button>
         )}
-        <Icon name="circle" className="text-[#F5F5F5]" size={12} />
-        {cameraEnabled ? (
-          <div 
-            className="bg-primary p-2 rounded-xl"
-            onClick={handleCameraToggle}
-          >
-            <Icon name="video" className="text-white" />
-          </div>
-        ) : (
-          <div 
-            className="bg-[#F5F5F5] p-2 rounded-xl"
-            onClick={handleCameraToggle}
-          >
-            <Icon name="videoOff" className="text-white" />
-          </div>
-        )}
+        
+        {/* Main camera toggle button */}
+        <button 
+          onClick={handleCameraToggle}
+          disabled={isLoading}
+          className={`rounded-xl flex items-center justify-center ${
+            isLoading ? 'opacity-50' : ''
+          }`}
+          style={{
+            minWidth: '36px',
+            minHeight: '36px',
+            backgroundColor: enabled ? '#6366f1' : '#f5f5f5',
+            transition: 'all 0.2s'
+          }}
+        >
+          <Icon 
+            name={enabled ? "video" : "videoOff"} 
+            className={enabled ? "text-white" : "text-gray-500"} 
+            size={20}
+          />
+        </button>
       </div>
       
-      {/* Show any errors */}
-      {error && (
-        <div className="absolute bottom-16 left-0 right-0 mx-auto bg-red-500 text-white p-2 rounded text-center text-sm">
+      {/* Error message tooltip */}
+      {showErrorMessage && (
+        <div className="absolute -bottom-12 left-1/2 transform -translate-x-1/2 bg-red-500 text-white text-xs p-2 rounded whitespace-nowrap z-20">
           {error}
         </div>
       )}
-    </>
+    </div>
   );
-};
-
-/**
- * Fixed version of track toggle that works on iOS, properly follows React hooks rules
- */
-export const IOSCompatibleTrackToggle = ({ source, children }) => {
-  // Always initialize all hooks at the top level
-  const { enableCamera } = useCameraSwitch();
-  const [isEnabled, setIsEnabled] = useState(false);
-  
-  const handleToggle = async () => {
-    if (!isEnabled) {
-      await enableCamera();
-    }
-    setIsEnabled(!isEnabled);
-  };
-  
-  // Render logic based on track source
-  if (source === Track.Source.Camera) {
-    // For camera track, use our custom component with injected props
-    return React.cloneElement(children, { 
-      enabled: isEnabled,
-      toggle: handleToggle 
-    });
-  } else {
-    // For other track types, use the original TrackToggle
-    return (
-      <TrackToggle source={source} showIcon={false}>
-        {children}
-      </TrackToggle>
-    );
-  }
 };
 
 export default CameraToggleButton;
