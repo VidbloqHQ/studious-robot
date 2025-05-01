@@ -1,0 +1,9 @@
+[build]
+  command = "npm run build"  # or "yarn build" if you use Yarn
+  publish = "dist"           # This should match your build output directory
+
+# This redirects all routes to index.html for single-page applications
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
