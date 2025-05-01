@@ -1,15 +1,17 @@
 import React, { useState, useEffect } from 'react';
 
-const SolanaWalletSetter = () => {
-  // Default Solana wallet addresses for quick testing
+const SolanaWalletSetter: React.FC = () => {
+  // List of sample wallet addresses to choose from
   const sampleAddresses = [
-    "D1MGu7SWvnKYkMcbvrMC4HUDpgPRr4cCLhRhXjbRTrmp", // Example valid Solana address 1
-    "9BRF5UBQbWHwKJnMdPLxYQpeQbRKiCeKZMHVNxRnUrq9", // Example valid Solana address 2
-    "CuieVDEDtLo7FypA9SbLM9saXFdb1dsshEkyErMqkRQq"  // Example valid Solana address 3
+    "D1MGu7SWvnKYkMcbvrMC4HUDpgPRr4cCLhRhXjbRTrmp",
+    "9BRF5UBQbWHwKJnMdPLxYQpeQbRKiCeKZMHVNxRnUrq9",
+    "CuieVDEDtLo7FypA9SbLM9saXFdb1dsshEkyErMqkRQq",
+    "3jbW3PoV3pzcYh1ZURhDaJJcffMaj3BQF89vNcvfL4Ec",
+    "HN7Sajd9zRzq4PvZnrKvkwpkZ3EGToEMgb5PH9Yct1M1"
   ];
 
   const [walletAddress, setWalletAddress] = useState('');
-  const [storageKey, setStorageKey] = useState('walletPublicKey'); // Changed default to walletPublicKey
+  const [storageKey] = useState('walletPublicKey');
   const [message, setMessage] = useState('');
   const [savedAddress, setSavedAddress] = useState('');
   const [showSuccess, setShowSuccess] = useState(false);
@@ -19,179 +21,171 @@ const SolanaWalletSetter = () => {
     try {
       const stored = localStorage.getItem(storageKey);
       if (stored) {
-        try {
-          // Try to parse as JSON first
-          const parsed = JSON.parse(stored);
-          if (parsed.address || parsed.publicKey) {
-            setSavedAddress(parsed.address || parsed.publicKey);
-          } else {
-            setSavedAddress(stored);
-          }
-        } catch (e) {
-          // If not JSON, use as is
-          setSavedAddress(stored);
-        }
+        setSavedAddress(stored);
       }
     } catch (err) {
       console.error("Error reading from localStorage:", err);
     }
   }, [storageKey]);
 
-  // Save wallet address to localStorage
+  // Save wallet address to localStorage as a simple string
   const saveWalletAddress = () => {
     if (!walletAddress.trim()) {
-      setMessage('Please enter a wallet address');
+      setMessage('Please enter or select a wallet address');
       setTimeout(() => setMessage(''), 3000);
       return;
     }
 
     try {
-      // Check if it looks like a Solana address (base58 encoded, usually 32-44 chars)
-      if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(walletAddress)) {
-        setMessage('Warning: This doesn\'t look like a valid Solana address');
-        setTimeout(() => setMessage(''), 5000);
-      }
-
-      // Simple storage as string
+      // Store ONLY as a simple string, not JSON
       localStorage.setItem(storageKey, walletAddress);
       
-      // Also try storing in JSON format that many wallets use
-      const walletJson = JSON.stringify({
-        publicKey: walletAddress,
-        address: walletAddress
-      });
-      localStorage.setItem(`${storageKey}_json`, walletJson);
-      
       setSavedAddress(walletAddress);
-      setWalletAddress('');
+      setWalletAddress(''); // Clear input
       setShowSuccess(true);
       setTimeout(() => setShowSuccess(false), 3000);
     } catch (err) {
-      setMessage(`Error saving to localStorage: ${err.message}`);
+      setMessage(`Error saving to localStorage: ${err instanceof Error ? err.message : String(err)}`);
       setTimeout(() => setMessage(''), 5000);
     }
   };
 
-  // Clear the stored wallet
-  const clearWallet = () => {
-    try {
-      localStorage.removeItem(storageKey);
-      localStorage.removeItem(`${storageKey}_json`);
-      setSavedAddress('');
-      setMessage('Wallet cleared from localStorage');
-      setTimeout(() => setMessage(''), 3000);
-    } catch (err) {
-      setMessage(`Error clearing localStorage: ${err.message}`);
-      setTimeout(() => setMessage(''), 5000);
-    }
-  };
-
-  // Use sample address
-  const useSampleAddress = (address) => {
+  // Function to select sample address - renamed to avoid "use" prefix
+  const selectSampleAddress = (address: string) => {
     setWalletAddress(address);
   };
 
   return (
-    <div className="p-4 max-w-md mx-auto bg-white rounded-lg shadow-md">
-      <h2 className="text-xl font-bold mb-4">Solana Wallet Setup</h2>
+    <div style={{ 
+      padding: '16px', 
+      margin: '16px 0', 
+      backgroundColor: '#f9f9f9', 
+      borderRadius: '8px',
+      border: '1px solid #e0e0e0'
+    }}>
+      <h3 style={{ margin: '0 0 16px 0' }}>Solana Wallet Setup</h3>
       
-      {/* Storage key selection */}
-      <div className="mb-4">
-        <label className="block mb-1">Storage Key:</label>
-        <select
-          value={storageKey}
-          onChange={(e) => setStorageKey(e.target.value)}
-          className="w-full p-2 border rounded"
-        >
-          <option value="walletPublicKey">walletPublicKey</option>
-          <option value="wallet">wallet</option>
-          <option value="solanaWallet">solanaWallet</option>
-          <option value="publicKey">publicKey</option>
-          <option value="userWallet">userWallet</option>
-        </select>
-      </div>
-      
-      {/* Wallet address input */}
-      <div className="mb-4">
-        <label className="block mb-1">Solana Wallet Address:</label>
-        <textarea
-          value={walletAddress}
+      <div style={{ marginBottom: '16px' }}>
+        <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>
+          Wallet Address:
+        </label>
+        <input 
+          type="text" 
+          value={walletAddress} 
           onChange={(e) => setWalletAddress(e.target.value)}
-          placeholder="Enter your Solana wallet address"
-          className="w-full p-2 border rounded font-mono text-sm"
-          rows={2}
+          placeholder="Enter wallet address"
+          style={{ 
+            width: '100%', 
+            padding: '8px', 
+            borderRadius: '4px', 
+            border: '1px solid #d9d9d9'
+          }}
         />
       </div>
       
-      {/* Sample addresses */}
-      <div className="mb-4">
-        <p className="text-sm mb-1">Sample addresses:</p>
-        <div className="flex flex-wrap gap-2">
+      <div style={{ marginBottom: '16px' }}>
+        <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>
+          Or select from sample addresses:
+        </label>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
           {sampleAddresses.map((address, index) => (
             <button
               key={index}
-              onClick={() => useSampleAddress(address)}
-              className="text-xs bg-gray-100 hover:bg-gray-200 rounded px-2 py-1 font-mono"
+              onClick={() => selectSampleAddress(address)}
+              style={{
+                padding: '6px 12px',
+                backgroundColor: '#f0f0f0',
+                border: '1px solid #d9d9d9',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '12px',
+                fontFamily: 'monospace'
+              }}
             >
-              {address.substring(0, 8)}...{address.substring(address.length - 4)}
+              {address.substring(0, 6)}...{address.substring(address.length - 4)}
             </button>
           ))}
         </div>
       </div>
       
-      {/* Action buttons */}
-      <div className="flex gap-2 mb-4">
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px' }}>
         <button
           onClick={saveWalletAddress}
-          className="bg-blue-500 text-white px-4 py-2 rounded flex-1"
+          style={{
+            padding: '8px 16px',
+            backgroundColor: '#1890ff',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: 'pointer'
+          }}
         >
-          Save Address
+          Save Wallet Address
         </button>
-        
-        <button
-          onClick={clearWallet}
-          className="bg-red-500 text-white px-4 py-2 rounded"
-          disabled={!savedAddress}
-        >
-          Clear
-        </button>
+        {savedAddress && (
+          <button
+            onClick={() => {
+              localStorage.removeItem(storageKey);
+              setSavedAddress('');
+              setMessage('Wallet cleared');
+              setTimeout(() => setMessage(''), 3000);
+            }}
+            style={{
+              padding: '8px 16px',
+              backgroundColor: '#ff4d4f',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer'
+            }}
+          >
+            Clear Wallet
+          </button>
+        )}
       </div>
       
-      {/* Messages */}
+      {showSuccess && (
+        <div style={{ 
+          padding: '8px 16px', 
+          backgroundColor: '#f6ffed', 
+          border: '1px solid #b7eb8f',
+          borderRadius: '4px',
+          color: '#52c41a',
+          marginBottom: '16px'
+        }}>
+          Wallet address saved successfully as a plain string!
+        </div>
+      )}
+      
       {message && (
-        <div className="mb-4 p-2 bg-yellow-100 border border-yellow-300 rounded text-sm">
+        <div style={{ 
+          padding: '8px 16px', 
+          backgroundColor: message.includes('Error') ? '#fff2f0' : '#e6f7ff', 
+          border: `1px solid ${message.includes('Error') ? '#ffccc7' : '#91d5ff'}`,
+          borderRadius: '4px',
+          color: message.includes('Error') ? '#ff4d4f' : '#1890ff',
+          marginBottom: '16px'
+        }}>
           {message}
         </div>
       )}
       
-      {/* Success message */}
-      {showSuccess && (
-        <div className="mb-4 p-2 bg-green-100 border border-green-300 rounded text-sm">
-          Wallet address saved successfully! Your app can now access it.
-        </div>
-      )}
-      
-      {/* Currently saved wallet */}
       {savedAddress && (
-        <div className="mt-6 p-3 bg-gray-50 rounded border">
-          <h3 className="font-bold text-sm mb-1">Currently Saved Address:</h3>
-          <p className="font-mono text-xs break-all">{savedAddress}</p>
-          <div className="mt-2 text-xs text-gray-500">
-            Saved to: <span className="font-mono">{storageKey}</span> and <span className="font-mono">{storageKey}_json</span>
-          </div>
+        <div style={{ 
+          padding: '8px 16px', 
+          backgroundColor: '#f0f0f0', 
+          borderRadius: '4px',
+          marginBottom: '16px'
+        }}>
+          <p style={{ margin: '0 0 8px 0', fontWeight: 'bold' }}>Currently saved wallet:</p>
+          <code style={{ wordBreak: 'break-all', fontSize: '12px' }}>
+            {savedAddress}
+          </code>
+          <p style={{ margin: '8px 0 0 0', fontSize: '12px', color: '#666' }}>
+            Stored as a plain string in localStorage with key: "walletPublicKey"
+          </p>
         </div>
       )}
-
-      {/* Instructions */}
-      <div className="mt-6 p-3 bg-blue-50 rounded border border-blue-100 text-sm">
-        <p className="font-bold mb-1">How this works:</p>
-        <ol className="list-decimal list-inside space-y-1">
-          <li>Enter your Solana wallet address or use a sample</li>
-          <li>Save it to your browser's localStorage</li>
-          <li>When you access your app, it will find this wallet address</li>
-          <li>Your backend can now validate this address and generate a token</li>
-        </ol>
-      </div>
     </div>
   );
 };
