@@ -1,349 +1,286 @@
-// import { useState, useCallback } from 'react';
-// import { useLocalParticipant } from '@livekit/components-react';
-// import { 
-//   Track, 
-//   createLocalVideoTrack, 
-//   LocalVideoTrack,
-//   LocalParticipant
-// } from 'livekit-client';
-
-// /**
-//  * A hook for switching between front and back cameras in a LiveKit livestream
-//  */
-// export const useCameraSwitch = () => {
-//   const [isFrontCamera, setIsFrontCamera] = useState(true);
-//   const [isLoading, setIsLoading] = useState(false);
-//   const [error, setError] = useState<string | null>(null);
-  
-//   // Get the actual local participant object from the hook
-//   const participantInfo = useLocalParticipant();
-//   const localParticipant = participantInfo.localParticipant as LocalParticipant | undefined;
-  
-//   // Get current camera track
-//   const getCameraTrack = useCallback((): LocalVideoTrack | undefined => {
-//     if (!localParticipant) return undefined;
-    
-//     // Get camera track publication
-//     const cameraPub = localParticipant.getTrackPublications().find(
-//       (publication) => 
-//         publication.kind === Track.Kind.Video && 
-//         publication.source === Track.Source.Camera
-//     );
-    
-//     if (!cameraPub || !cameraPub.track) return undefined;
-//     return cameraPub.track as LocalVideoTrack;
-//   }, [localParticipant]);
-  
-//   // Switch camera function
-//   const switchCamera = useCallback(async () => {
-//     if (!localParticipant || isLoading) return;
-    
-//     setIsLoading(true);
-//     setError(null);
-    
-//     try {
-//       const currentTrack = getCameraTrack();
-      
-//       // If we don't have a current video track, we can't switch
-//       if (!currentTrack) {
-//         throw new Error('No camera track found');
-//       }
-      
-//       // Get device info to determine which camera to select
-//       const devices = await navigator.mediaDevices.enumerateDevices();
-//       const videoInputs = devices.filter(device => device.kind === 'videoinput');
-      
-//       // If we have fewer than 2 cameras, we can't switch
-//       if (videoInputs.length < 2) {
-//         throw new Error('Multiple cameras not available on this device');
-//       }
-      
-//       // Get current device ID (if available)
-//       const currentDeviceId = await currentTrack.getDeviceId();
-      
-//       // Find a different camera to use
-//       let newDeviceId: string | undefined;
-      
-//       if (currentDeviceId) {
-//         // Find the next device that's not the current one
-//         const newDevice = videoInputs.find(device => device.deviceId !== currentDeviceId);
-//         newDeviceId = newDevice?.deviceId;
-//       } else {
-//         // If we can't determine the current device, just pick a different one
-//         newDeviceId = videoInputs[0].deviceId;
-//       }
-      
-//       if (!newDeviceId) {
-//         throw new Error('Could not find another camera');
-//       }
-      
-//       // Create new track with the selected camera
-//       const newCameraTrack = await createLocalVideoTrack({
-//         deviceId: newDeviceId,
-//         // The facingMode is just a hint but deviceId takes precedence
-//         facingMode: isFrontCamera ? 'environment' : 'user',
-//       });
-      
-//       // Stop the existing track
-//       currentTrack.stop();
-      
-//       // Get the track publication for the current camera track
-//       const cameraPub = localParticipant.getTrackPublications().find(
-//         (publication) => 
-//           publication.kind === Track.Kind.Video && 
-//           publication.source === Track.Source.Camera
-//       );
-      
-//       if (cameraPub) {
-//         // Unpublish the existing track
-//         await localParticipant.unpublishTrack(currentTrack);
-//       }
-      
-//       // Publish the new track
-//       await localParticipant.publishTrack(newCameraTrack);
-      
-//       // Toggle camera state
-//       setIsFrontCamera(!isFrontCamera);
-//     } catch (err) {
-//       console.error('Error switching camera:', err);
-      
-//       // Create a more user-friendly error message
-//       let errorMessage = 'Failed to switch camera';
-      
-//       if (err instanceof Error) {
-//         errorMessage = err.message;
-//       }
-      
-//       setError(errorMessage);
-//     } finally {
-//       setIsLoading(false);
-//     }
-//   }, [localParticipant, isFrontCamera, isLoading, getCameraTrack]);
-  
-//   return {
-//     isFrontCamera,
-//     isLoading,
-//     error,
-//     switchCamera,
-//   };
-// };
-
-import { useState, useEffect } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useLocalParticipant } from '@livekit/components-react';
-import { LocalVideoTrack, createLocalVideoTrack } from 'livekit-client';
+import { LocalVideoTrack, createLocalVideoTrack, VideoCaptureOptions } from 'livekit-client';
 
-/**
- * Hook to enable camera switching on iOS devices
- * Works around Safari/iOS limitations with camera access
- */
-export const useMobileCameraAccess = () => {
-  const [iOSPermissionGranted, setIOSPermissionGranted] = useState(false);
-  const [isInitializing, setIsInitializing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  
-  const participantInfo = useLocalParticipant();
-  const localParticipant = participantInfo.localParticipant;
-  
-  // Check if we're on iOS
-  const isIOS = () => {
-    return (
-      ['iPad', 'iPhone', 'iPod'].includes(navigator.platform) ||
-      (navigator.userAgent.includes('Mac') && 'ontouchend' in document)
-    );
-  };
-  
-  // Initialize camera access on iOS
-  const initIOSCameraAccess = async () => {
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      setError('Camera access not supported in this browser');
-      return false;
-    }
-    
-    setIsInitializing(true);
-    setError(null);
-    
-    try {
-      // Request camera access explicitly
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: true,
-        audio: false 
-      });
-      
-      // Clean up the temporary stream
-      stream.getTracks().forEach(track => track.stop());
-      
-      setIOSPermissionGranted(true);
-      setIsInitializing(false);
-      return true;
-    } catch (err) {
-      console.error('Error requesting camera access:', err);
-      setError('Camera permission denied or not available');
-      setIsInitializing(false);
-      return false;
-    }
-  };
-  
-  // Initialize on component mount for iOS devices
-  useEffect(() => {
-    if (isIOS() && !iOSPermissionGranted) {
-      // We'll initialize permissions when the user tries to turn on camera
-      console.log('iOS device detected, camera permissions will be requested when needed');
-    }
-  }, [iOSPermissionGranted]);
-  
-  // Function to safely enable camera
-  const enableCamera = async () => {
-    if (isIOS() && !iOSPermissionGranted) {
-      const permissionGranted = await initIOSCameraAccess();
-      if (!permissionGranted) return false;
-    }
-    
-    try {
-      if (!localParticipant) {
-        setError('No local participant found');
-        return false;
-      }
-      
-      // Create and publish camera track
-      const cameraTrack = await createLocalVideoTrack({
-        facingMode: 'user',
-      });
-      
-      await localParticipant.publishTrack(cameraTrack);
-      return true;
-    } catch (err) {
-      console.error('Error enabling camera:', err);
-      setError('Failed to enable camera');
-      return false;
-    }
-  };
-  
-  return {
-    isIOS: isIOS(),
-    isInitializing,
-    error,
-    enableCamera,
-    initIOSCameraAccess
-  };
-};
+// Type definitions
+type FacingMode = 'user' | 'environment' | 'left' | 'right';
 
-/**
- * Enhanced version of useCameraSwitch that handles iOS-specific issues
- */
-export const useCameraSwitch = () => {
+interface CameraDevice {
+  deviceId: string;
+  label: string;
+  isFront: boolean;
+}
+
+interface CameraSwitchHookResult {
+  isFrontCamera: boolean;
+  isLoading: boolean;
+  error: string | null;
+  availableCameras: CameraDevice[];
+  switchCamera: () => Promise<void>;
+  enableCamera: () => Promise<boolean>;
+  turnOffCamera: () => Promise<void>;
+}
+
+export const useCameraSwitch = (): CameraSwitchHookResult => {
   const [isFrontCamera, setIsFrontCamera] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [availableCameras, setAvailableCameras] = useState<CameraDevice[]>([]);
+  const [consecutiveFailures, setConsecutiveFailures] = useState(0);
   
-  const { isIOS, enableCamera, initIOSCameraAccess } = useMobileCameraAccess();
+  // Get the participant from LiveKit
   const participantInfo = useLocalParticipant();
-  const localParticipant = participantInfo.localParticipant;
+  const localParticipant = participantInfo?.localParticipant;
   
-  // Get current camera track
-  const getCameraTrack = (): LocalVideoTrack | undefined => {
+  // Function to refresh available camera devices
+  const refreshCameraList = useCallback(async () => {
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
+        console.warn('[Camera Utils] enumerateDevices() not supported');
+        return;
+      }
+      
+      // Request camera permission to get accurate device list
+      try {
+        const tempStream = await navigator.mediaDevices.getUserMedia({ video: true });
+        tempStream.getTracks().forEach(track => track.stop());
+      } catch (err) {
+        console.warn('[Camera Utils] Could not get permission to list devices', err);
+      }
+      
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const videoDevices = devices.filter(device => device.kind === 'videoinput');
+      
+      // Map to our more useful format with front/back detection
+      const cameraDevices: CameraDevice[] = videoDevices.map(device => {
+        const label = device.label || `Camera ${device.deviceId.slice(0, 4)}`;
+        // Detect if front or back based on label
+        const isFront = !label.toLowerCase().includes('back') && 
+                      (label.toLowerCase().includes('front') || 
+                       label.toLowerCase().includes('user') ||
+                       label.toLowerCase().includes('facetime'));
+        
+        return {
+          deviceId: device.deviceId,
+          label,
+          isFront
+        };
+      });
+      
+      setAvailableCameras(cameraDevices);
+      console.log(`[Camera Utils] Found ${cameraDevices.length} camera(s)`);
+      
+    } catch (err) {
+      console.error('[Camera Utils] Error enumerating devices:', err);
+    }
+  }, []);
+  
+  // Initialize camera list on mount
+  useEffect(() => {
+    refreshCameraList();
+    
+    // Add device change listener
+    const handleDeviceChange = () => {
+      console.log('[Camera Utils] Media devices changed, refreshing list');
+      refreshCameraList();
+    };
+    
+    if (navigator.mediaDevices?.addEventListener) {
+      try {
+        navigator.mediaDevices.addEventListener('devicechange', handleDeviceChange);
+      } catch (err) {
+        console.warn('[Camera Utils] Could not add devicechange listener:', err);
+      }
+    }
+    
+    return () => {
+      if (navigator.mediaDevices?.removeEventListener) {
+        try {
+          navigator.mediaDevices.removeEventListener('devicechange', handleDeviceChange);
+        } catch (err) {
+          console.warn('[Camera Utils] Could not remove devicechange listener:', err);
+        }
+      }
+    };
+  }, [refreshCameraList]);
+  
+  // Get current camera track helper
+  const getCameraTrack = useCallback((): LocalVideoTrack | undefined => {
     if (!localParticipant) return undefined;
     
-    // Get camera track publication
-    const cameraPub = localParticipant.getTrackPublications().find(
-      (publication) => 
-        publication.kind === 'video' && 
-        publication.source === 'camera'
+    const publications = localParticipant.getTrackPublications();
+    const cameraPub = publications.find(
+      pub => pub.kind === 'video' && pub.source === 'camera'
     );
     
-    if (!cameraPub || !cameraPub.track) return undefined;
-    return cameraPub.track as LocalVideoTrack;
-  };
+    return cameraPub?.track as LocalVideoTrack | undefined;
+  }, [localParticipant]);
   
-  // Switch camera function
-  const switchCamera = async () => {
+  // Get device ID safely (handling Promise if needed)
+  const getDeviceId = useCallback(async (track: LocalVideoTrack): Promise<string | undefined> => {
+    try {
+      const deviceId = track.getDeviceId();
+      
+      // If deviceId is a Promise, await it
+      if (deviceId instanceof Promise) {
+        return await deviceId;
+      }
+      
+      return deviceId;
+    } catch (err) {
+      console.warn('[Camera Utils] Error getting device ID:', err);
+      return undefined;
+    }
+  }, []);
+  
+  // Function to enable camera
+  const enableCamera = useCallback(async (): Promise<boolean> => {
+    if (!localParticipant || isLoading) return false;
+    
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      // Create camera track with front-facing camera by default
+      const cameraTrack = await createLocalVideoTrack({
+        facingMode: 'user'
+      });
+      
+      await localParticipant.publishTrack(cameraTrack);
+      setIsFrontCamera(true);
+      return true;
+    } catch (err) {
+      console.error('[Camera Utils] Error enabling camera:', err);
+      setError(err instanceof Error ? err.message : 'Failed to enable camera');
+      return false;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [localParticipant, isLoading]);
+  
+  // Function to turn off camera
+  const turnOffCamera = useCallback(async (): Promise<void> => {
+    if (!localParticipant || isLoading) return;
+    
+    const currentTrack = getCameraTrack();
+    if (!currentTrack) return;
+    
+    setIsLoading(true);
+    
+    try {
+      currentTrack.stop();
+      await localParticipant.unpublishTrack(currentTrack);
+    } catch (err) {
+      console.error('[Camera Utils] Error turning off camera:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [localParticipant, isLoading, getCameraTrack]);
+  
+  // Enhanced camera switching with retry logic
+  const switchCamera = useCallback(async (): Promise<void> => {
     if (!localParticipant || isLoading) return;
     
     setIsLoading(true);
     setError(null);
     
     try {
-      const currentTrack = getCameraTrack();
-      
-      // Handle iOS-specific initialization if needed
-      if (isIOS && !currentTrack) {
-        await initIOSCameraAccess();
-      }
-      
-      // If no current track, try to enable camera first
-      if (!currentTrack) {
-        const enabled = await enableCamera();
-        if (!enabled) {
-          throw new Error('Failed to enable camera');
+      // First update device list if needed
+      if (availableCameras.length < 2) {
+        await refreshCameraList();
+        if (availableCameras.length < 2) {
+          throw new Error('Multiple cameras are not available on this device');
         }
-        setIsLoading(false);
-        return; // First call just enables the camera
       }
       
-      // Get device info to determine which camera to select
-      const devices = await navigator.mediaDevices.enumerateDevices();
-      const videoInputs = devices.filter(device => device.kind === 'videoinput');
+      const currentTrack = getCameraTrack();
+      const nextFacingMode: FacingMode = isFrontCamera ? 'environment' : 'user';
       
-      // If we have fewer than 2 cameras, we can't switch
-      if (videoInputs.length < 2) {
-        throw new Error('Multiple cameras not available on this device');
+      // If no current track, enable camera first
+      if (!currentTrack) {
+        console.log('[Camera Utils] No camera track, enabling camera first');
+        await enableCamera();
+        return;
       }
       
-      // Get current device ID (if available)
-      const currentDeviceId = await currentTrack.getDeviceId();
+      // Get current device ID
+      const currentDeviceId = await getDeviceId(currentTrack);
       
-      // Find a different camera to use
+      // Find the next camera to use
       let newDeviceId: string | undefined;
       
-      if (currentDeviceId) {
-        // Find the next device that's not the current one
-        const newDevice = videoInputs.find(device => device.deviceId !== currentDeviceId);
-        newDeviceId = newDevice?.deviceId;
+      if (availableCameras.length >= 2) {
+        // Find camera with opposite facing direction
+        const targetCameras = availableCameras.filter(
+          camera => camera.isFront !== isFrontCamera
+        );
+        
+        if (targetCameras.length > 0) {
+          newDeviceId = targetCameras[0].deviceId;
+        } else {
+          // If we can't determine front/back, just use a different camera
+          const otherCamera = availableCameras.find(
+            camera => camera.deviceId !== currentDeviceId
+          );
+          newDeviceId = otherCamera?.deviceId;
+        }
+      }
+      
+      // Set up constraints for the new track
+      const trackConstraints: VideoCaptureOptions = {};
+      
+      if (newDeviceId) {
+        trackConstraints.deviceId = { exact: newDeviceId };
       } else {
-        // If we can't determine the current device, just pick a different one
-        newDeviceId = videoInputs[0].deviceId;
+        trackConstraints.facingMode = nextFacingMode;
       }
       
-      if (!newDeviceId) {
-        throw new Error('Could not find another camera');
-      }
+      console.log(`[Camera Utils] Switching to ${isFrontCamera ? 'back' : 'front'} camera`);
       
-      // Create new track with the selected camera
-      const newCameraTrack = await createLocalVideoTrack({
-        deviceId: newDeviceId,
-        // The facingMode is just a hint but deviceId takes precedence
-        facingMode: isFrontCamera ? 'environment' : 'user',
-      });
-      
-      // Stop the existing track
+      // Stop current track
       currentTrack.stop();
       
-      // Unpublish the existing track
+      // Create and publish new track
+      const newTrack = await createLocalVideoTrack(trackConstraints);
       await localParticipant.unpublishTrack(currentTrack);
-      
-      // Publish the new track
-      await localParticipant.publishTrack(newCameraTrack);
+      await localParticipant.publishTrack(newTrack);
       
       // Toggle camera state
       setIsFrontCamera(!isFrontCamera);
-    } catch (err) {
-      console.error('Error switching camera:', err);
+      setConsecutiveFailures(0);
       
-      let errorMessage = 'Failed to switch camera';
-      if (err instanceof Error) {
-        errorMessage = err.message;
+    } catch (err) {
+      console.error('[Camera Utils] Camera switch error:', err);
+      setConsecutiveFailures(prev => prev + 1);
+      
+      // After multiple failures, try refreshing device list
+      if (consecutiveFailures >= 2) {
+        await refreshCameraList();
       }
       
-      setError(errorMessage);
+      setError(err instanceof Error ? err.message : 'Failed to switch camera');
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [
+    localParticipant,
+    isLoading,
+    getCameraTrack,
+    isFrontCamera,
+    availableCameras,
+    consecutiveFailures,
+    refreshCameraList,
+    getDeviceId,
+    enableCamera
+  ]);
   
   return {
     isFrontCamera,
     isLoading,
     error,
+    availableCameras,
     switchCamera,
-    enableCamera // Expose this for direct camera enabling
+    enableCamera,
+    turnOffCamera
   };
 };

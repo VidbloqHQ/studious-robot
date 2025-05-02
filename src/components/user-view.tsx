@@ -96,10 +96,11 @@ const UserView = () => {
           <button className="p-2 bg-secondary-light">one</button>
           <button className="p-2 bg-secondary-dark">one</button>
         </div> */}
-  <button onClick={switchCamera}>switch camera</button>
+  <button onClick={switchCamera} className="border p-1">switch camera</button>
         <div className="w-[80%] mx-auto">
           <CallControlsz />
         </div>
+        {/* <CallControlz /> */}
 
         {/* <TestingHooks /> */}
       </ParticipantContext.Provider>
