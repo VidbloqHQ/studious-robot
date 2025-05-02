@@ -1,6 +1,6 @@
 import { StreamRoom, StreamView, VidbloqProvider } from "./components";
 // import IOSCameraDebug from "./components/IOSCameraDebug";
-import LiveKitWrapper from "./components/LiveKitWrapper";
+// import LiveKitWrapper from "./components/LiveKitWrapper";
 import  ErrorBoundary  from "./ErrorBoundary";
 // import { isIOSBrowser } from "./utils/ios-direct-fix";
 import SolanaWalletSetter from "./components/SolanaWalletSetter";
@@ -12,7 +12,7 @@ function App() {
   // const showDebug = isIOSBrowser();
   return (
     <ErrorBoundary>
-      <LiveKitWrapper>
+      {/* <LiveKitWrapper> */}
         <SolanaWalletSetter />
         {/* {showDebug && <IOSCameraDebug />} */}
         <VidbloqProvider
@@ -26,7 +26,7 @@ function App() {
           {/* <WebSocketTest /> */}
           {/* <CallControlz /> */}
         </VidbloqProvider>
-      </LiveKitWrapper>
+      {/* </LiveKitWrapper> */}
     </ErrorBoundary>
   );
 }
