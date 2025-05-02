@@ -294,8 +294,6 @@
 // export default CallControls;
 
 import React from "react";
-// import { Track } from "livekit-client";
-// import { TrackToggle } from "@livekit/components-react";
 import BaseCallControls, { CallControlsRenderProps } from './base-call-controls';
 import { Icon } from "./icons";
 import { 
@@ -477,15 +475,14 @@ const CallControls: React.FC<CallControlsProps> = ({
                   icon={micIcons}
                   showLabel={false}
                   onChange={(enabled) => {
-                    if (enabled !== isMicEnabled) {
-                      toggleMic();
-                    }
+                    console.log(`Mic onChange callback: ${enabled}`);
+                    // The toggleMic will be called internally by the component
                   }}
                 />
               )
             )}
 
-            {/* Camera - Using our enhanced CameraControl component */}
+            {/* Camera */}
             {canAccessMediaControls && (
               components?.CameraButton ? (
                 <div className="bg-white flex flex-row items-center justify-between p-0.5 rounded-2xl gap-x-2">
@@ -496,11 +493,6 @@ const CallControls: React.FC<CallControlsProps> = ({
                   icon={cameraIcons}
                   switchIcons={switchIcons}
                   showLabel={false}
-                  onChange={(enabled) => {
-                    if (enabled !== isCameraEnabled) {
-                      // No need to call toggle here as TrackToggle handles it internally
-                    }
-                  }}
                   onSwitchError={(error) => console.error('Camera error:', error)}
                 />
               )

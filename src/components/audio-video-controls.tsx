@@ -206,11 +206,13 @@
 //   );
 // };
 
-import { useState, useEffect, useRef } from "react";
+// components/audio-video-controls.tsx
+import { useState, useEffect, useCallback } from "react";
 import { Track } from "livekit-client";
 import { TrackToggle, useLocalParticipant } from "@livekit/components-react";
 import { Icon } from "./icons";
 import { isMobileDevice } from "../utils/camera-utils";
+import { useCameraSwitch } from "../hooks/useCameraSwitch";
 
 // Base props shared by all media control components
 type MediaControlProps = {
@@ -226,8 +228,8 @@ type MediaControlProps = {
 };
 
 /**
- * MicrophoneControl component for toggling audio
- * Modern UI style (formerly variant='modern')
+ * MicrophoneControl component for toggling audio with improved state handling
+ * Modern UI style with immediate state updates
  */
 export const MicrophoneControl: React.FC<MediaControlProps> = ({
   className = "",
@@ -238,40 +240,106 @@ export const MicrophoneControl: React.FC<MediaControlProps> = ({
   icon,
 }) => {
   const [isEnabled, setIsEnabled] = useState(false);
+  const { localParticipant } = useLocalParticipant();
   
-  const handleChange = (enabled: boolean) => {
-    setIsEnabled(enabled);
-    if (onChange) {
-      onChange(enabled);
+  // Check initial mic state on mount
+  useEffect(() => {
+    if (!localParticipant) return;
+    
+    const micPublication = localParticipant.getTrackPublication(Track.Source.Microphone);
+    if (micPublication) {
+      const initialState = !micPublication.isMuted;
+      setIsEnabled(initialState);
     }
+  }, [localParticipant]);
+  
+  // Listen for track mute/unmute events from LiveKit
+  useEffect(() => {
+    if (!localParticipant) return;
+    
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const handleTrackMuted = (pub: any) => {
+      if (pub.kind === 'audio' && pub.source === Track.Source.Microphone) {
+        console.log('[MicControl] Track muted event');
+        setIsEnabled(false);
+      }
+    };
+    
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const handleTrackUnmuted = (pub: any) => {
+      if (pub.kind === 'audio' && pub.source === Track.Source.Microphone) {
+        console.log('[MicControl] Track unmuted event');
+        setIsEnabled(true);
+      }
+    };
+    
+    localParticipant.on('trackMuted', handleTrackMuted);
+    localParticipant.on('trackUnmuted', handleTrackUnmuted);
+    
+    return () => {
+      localParticipant.off('trackMuted', handleTrackMuted);
+      localParticipant.off('trackUnmuted', handleTrackUnmuted);
+    };
+  }, [localParticipant]);
+  
+  // Handle direct toggle action to improve responsiveness
+  const handleToggle = useCallback(() => {
+    if (!localParticipant) return;
+    
+    const publication = localParticipant.getTrackPublication(Track.Source.Microphone);
+    if (!publication) return;
+    
+    // Optimistically update UI state immediately
+    const newState = !isEnabled;
+    setIsEnabled(newState);
+    
+    // Then perform the actual track operation
+    if (newState) {
+      publication.unmute();
+    } else {
+      publication.mute();
+    }
+    
+    // Notify parent if callback provided
+    if (onChange) {
+      onChange(newState);
+    }
+  }, [localParticipant, isEnabled, onChange]);
+  
+  // Default icons
+  const defaultIcons = {
+    enabled: <Icon name="audio" className="text-white" />,
+    disabled: <Icon name="audioOff" className="text-white" />,
+  };
+  
+  // Use custom icons if provided, otherwise use defaults
+  const micIcons = {
+    enabled: icon?.enabled || defaultIcons.enabled,
+    disabled: icon?.disabled || defaultIcons.disabled
   };
   
   return (
     <div className={`bg-white flex flex-row items-center justify-between p-0.5 rounded-2xl gap-x-2 ${className}`} style={style}>
       <Icon name="circle" className="text-[#F5F5F5]" size={12} />
-      <TrackToggle
-        source={Track.Source.Microphone}
-        showIcon={false}
-        onChange={handleChange}
-      >
+      <div onClick={handleToggle} className="cursor-pointer">
         {isEnabled ? (
           <div className="bg-primary p-2 rounded-xl">
-            {icon?.enabled || <Icon name="audio" className="text-white" />}
+            {micIcons.enabled}
           </div>
         ) : (
           <div className="bg-[#F5F5F5] p-2 rounded-xl">
-            {icon?.disabled || <Icon name="audioOff" className="text-white" />}
+            {micIcons.disabled}
           </div>
         )}
-      </TrackToggle>
+      </div>
       {showLabel && <span className="text-xs ml-1">{labelText}</span>}
     </div>
   );
 };
 
 /**
- * Enhanced CameraControl component for toggling video with camera switching
- * Modern UI style with reliable camera switching for mobile devices
+ * CameraControl component for toggling video with reliable camera switching
+ * Modern UI style with enhanced switching for mobile devices
  */
 export const CameraControl: React.FC<MediaControlProps & {
   switchIcons?: {
@@ -290,60 +358,25 @@ export const CameraControl: React.FC<MediaControlProps & {
   onSwitchError,
 }) => {
   const [isEnabled, setIsEnabled] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [showErrorMessage, setShowErrorMessage] = useState(false);
-  const [lastActionTime, setLastActionTime] = useState(0);
-  const hasMultipleCameras = useRef(false);
-  const isFrontCamera = useRef(true);
   
-  // Get local participant to access camera tracks
-  const { localParticipant } = useLocalParticipant();
+  // Use enhanced camera switch hook
+  const {
+    isFrontCamera,
+    isLoading,
+    error,
+    hasMultipleCameras,
+    switchCamera
+  } = useCameraSwitch();
   
-  // Detect if on mobile device
-  const isMobile = isMobileDevice();
-  
-  // Check for available cameras
-  useEffect(() => {
-    const checkCameras = async () => {
-      try {
-        // Request camera permission to get accurate device list
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-        stream.getTracks().forEach(track => track.stop());
-        
-        // Get device list
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        const videoDevices = devices.filter(device => device.kind === 'videoinput');
-        
-        hasMultipleCameras.current = videoDevices.length >= 2;
-      } catch (err) {
-        console.warn('Could not check for multiple cameras:', err);
-      }
-    };
-    
-    checkCameras();
-    
-    // Add device change listener
-    const handleDeviceChange = () => checkCameras();
-    
-    if (navigator.mediaDevices?.addEventListener) {
-      try {
-        navigator.mediaDevices.addEventListener('devicechange', handleDeviceChange);
-      } catch (err) {
-        console.warn('Could not add devicechange listener:', err);
-      }
+  // Handle camera toggle state changes
+  const handleChange = (enabled: boolean) => {
+    console.log(`[CameraControl] Camera toggled to: ${enabled ? 'enabled' : 'disabled'}`);
+    setIsEnabled(enabled);
+    if (onChange) {
+      onChange(enabled);
     }
-    
-    return () => {
-      if (navigator.mediaDevices?.removeEventListener) {
-        try {
-          navigator.mediaDevices.removeEventListener('devicechange', handleDeviceChange);
-        } catch (err) {
-          console.warn('Could not remove devicechange listener:', err);
-        }
-      }
-    };
-  }, []);
+  };
   
   // Handle error display
   useEffect(() => {
@@ -361,86 +394,31 @@ export const CameraControl: React.FC<MediaControlProps & {
     }
   }, [error, onSwitchError]);
   
-  const handleChange = (enabled: boolean) => {
-    setIsEnabled(enabled);
-    if (onChange) {
-      onChange(enabled);
-    }
+  // Default icons
+  const defaultIcons = {
+    enabled: <Icon name="video" className="text-white" />,
+    disabled: <Icon name="videoOff" className="text-white" />,
   };
   
-  // Debounce function for camera actions to prevent rapid clicking
-  const debouncedAction = (action: () => Promise<void>) => {
-    const now = Date.now();
-    if (now - lastActionTime < 1000 || isLoading) {
-      return;
-    }
-    
-    setLastActionTime(now);
-    setIsLoading(true);
-    
-    action().finally(() => {
-      // Re-enable after a delay
-      setTimeout(() => {
-        setIsLoading(false);
-      }, 1000);
-    });
+  const defaultSwitchIcons = {
+    switchCamera: <Icon name="Poll" className="text-primary" size={16} />,
+    loading: <Icon name="usdt" className="text-primary animate-spin" size={16} />
   };
   
-  // Switch between front and back cameras
-  const switchCamera = () => {
-    if (!localParticipant || !isEnabled) return;
-    
-    debouncedAction(async () => {
-      try {
-        // Get current camera track
-        const publications = localParticipant.getTrackPublications();
-        const cameraPub = publications.find(
-          pub => pub.kind === 'video' && pub.source === 'camera'
-        );
-        
-        if (!cameraPub || !cameraPub.track) {
-          throw new Error('No camera track found');
-        }
-        
-        // Get available camera devices
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        const videoDevices = devices.filter(device => device.kind === 'videoinput');
-        
-        if (videoDevices.length < 2) {
-          throw new Error('Multiple cameras not available on this device');
-        }
-        
-        // Get current track info
-        // (No need to get mediaStreamTrack since we're using LiveKit's built-in methods)
-        
-        // Create constraints for next camera
-        // Switch facingMode between 'user' (front) and 'environment' (back)
-        const nextFacingMode = isFrontCamera.current ? 'environment' : 'user';
-        
-        // Let LiveKit handle the track switching
-        await localParticipant.setCameraEnabled(false);
-        
-        // Short delay to ensure the track is properly unpublished
-        await new Promise(resolve => setTimeout(resolve, 300));
-        
-        // Enable camera with new constraints
-        await localParticipant.setCameraEnabled(true, {
-          facingMode: nextFacingMode
-        });
-        
-        // Update front camera state
-        isFrontCamera.current = !isFrontCamera.current;
-        
-      } catch (err) {
-        console.error('Camera switch error:', err);
-        setError(err instanceof Error ? err.message : 'Failed to switch camera');
-      }
-    });
+  // Use custom icons if provided, otherwise use defaults
+  const videoIcons = {
+    enabled: icon?.enabled || defaultIcons.enabled,
+    disabled: icon?.disabled || defaultIcons.disabled
   };
   
-  // Custom switch camera button with enhanced reliability
-  const CameraSwitch = () => {
-    if (!isMobile || !hasMultipleCameras.current || !isEnabled) return null;
+  const camSwitchIcons = {
+    switchCamera: switchIcons?.switchCamera || defaultSwitchIcons.switchCamera,
+    loading: switchIcons?.loading || defaultSwitchIcons.loading
+  };
+  
+  // Switch camera button component
+  const CameraSwitchButton = () => {
+    if (!isMobileDevice() || !hasMultipleCameras || !isEnabled) return null;
     
     return (
       <button
@@ -451,14 +429,11 @@ export const CameraControl: React.FC<MediaControlProps & {
         }}
         disabled={isLoading}
         className="ml-2 relative"
-        aria-label={`Switch to ${isFrontCamera.current ? 'back' : 'front'} camera`}
+        aria-label={`Switch to ${isFrontCamera ? 'back' : 'front'} camera`}
       >
         <div className="bg-white p-0.5 rounded-2xl cursor-pointer h-[44px] w-[44px]">
           <div className="bg-[#DCCCF63D] rounded-2xl h-full flex flex-col items-center justify-center">
-            {isLoading ? 
-              (switchIcons?.loading || <Icon name="usdt" className="text-primary animate-spin" size={16} />) : 
-              (switchIcons?.switchCamera || <Icon name="Poll" className="text-primary" size={16} />)
-            }
+            {isLoading ? camSwitchIcons.loading : camSwitchIcons.switchCamera}
           </div>
         </div>
       </button>
@@ -476,15 +451,15 @@ export const CameraControl: React.FC<MediaControlProps & {
         >
           {isLoading ? (
             <div className="bg-primary p-2 rounded-xl">
-              {switchIcons?.loading || <Icon name="usdt" className="text-white animate-spin" />}
+              {camSwitchIcons.loading}
             </div>
           ) : isEnabled ? (
             <div className="bg-primary p-2 rounded-xl">
-              {icon?.enabled || <Icon name="video" className="text-white" />}
+              {videoIcons.enabled}
             </div>
           ) : (
             <div className="bg-[#F5F5F5] p-2 rounded-xl">
-              {icon?.disabled || <Icon name="videoOff" className="text-white" />}
+              {videoIcons.disabled}
             </div>
           )}
         </TrackToggle>
@@ -492,7 +467,7 @@ export const CameraControl: React.FC<MediaControlProps & {
       </div>
       
       {/* Camera switch button */}
-      <CameraSwitch />
+      <CameraSwitchButton />
       
       {/* Error message tooltip */}
       {showErrorMessage && error && (
