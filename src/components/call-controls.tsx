@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 // import React from "react";
 // import { Track } from "livekit-client";
 // import { TrackToggle } from "@livekit/components-react";
@@ -93,7 +92,7 @@
 
 //           {/* Record button */}
 //           {userType === "host" && (
-//             <div 
+//             <div
 //               className="rounded-2xl p-0.5 bg-primary flex flex-row text-white items-center gap-x-2 cursor-pointer"
 //               onClick={toggleRecording}
 //             >
@@ -148,9 +147,9 @@
 //               >
 //                 <div className="bg-white p-0.5 rounded-2xl cursor-pointer h-[44px] w-[44px]">
 //                   {components?.ScreenShareButton ? (
-//                     <components.ScreenShareButton 
-//                       enabled={isScreenSharingEnabled} 
-//                       toggle={toggleScreenShare} 
+//                     <components.ScreenShareButton
+//                       enabled={isScreenSharingEnabled}
+//                       toggle={toggleScreenShare}
 //                     />
 //                   ) : (
 //                     <div className={`${isScreenSharingEnabled ? 'bg-gradient-to-t from-[#DCCCF6] to-primary' : 'bg-[#DCCCF63D]'} rounded-2xl h-full flex flex-col items-center justify-center`}>
@@ -195,15 +194,15 @@
 //                   <components.CameraButton enabled={isCameraEnabled} toggle={() => {}} />
 //                 </div>
 //               ) : (
-//                 <CameraToggle 
+//                 <CameraToggle
 //                   customIcons={cameraIcons}
-//                   onError={(error) => console.error('Camera error:', error)} 
+//                   onError={(error) => console.error('Camera error:', error)}
 //                 />
 //               )
 //             )}
-            
+
 //             {/* Reactions */}
-//             <div 
+//             <div
 //               className="bg-white p-0.5 rounded-2xl cursor-pointer h-[44px] w-[44px]"
 //               onClick={onReactionsToggle}
 //             >
@@ -217,7 +216,7 @@
 //             </div>
 
 //             {/* Chat */}
-//             <div 
+//             <div
 //               className="bg-white p-0.5 rounded-2xl cursor-pointer h-[44px] w-[44px]"
 //               onClick={onChatToggle}
 //             >
@@ -232,7 +231,7 @@
 //           </div>
 
 //           {/* End call button */}
-//           <div 
+//           <div
 //             className="rounded-2xl p-0.5 bg-[#D40000] flex flex-row text-white items-center gap-x-2 cursor-pointer"
 //             onClick={handleDisconnectClick}
 //           >
@@ -295,14 +294,19 @@
 // export default CallControls;
 
 import React from "react";
-import BaseCallControls, { CallControlsRenderProps } from './base-call-controls';
-import { 
-  MicrophoneControl, 
-  CameraToggle, 
-  ScreenShareControl, 
-  RecordControl 
-} from "./audio-video-controls";
+// import { Track } from "livekit-client";
+// import { TrackToggle } from "@livekit/components-react";
+import BaseCallControls, {
+  CallControlsRenderProps,
+} from "./base-call-controls";
 import { Icon } from "./icons";
+// import CameraToggle from "./camera-toggle";
+import {
+  MicrophoneControl,
+  ScreenShareControl,
+  RecordControl,
+  CameraToggle
+} from "./audio-video-controls";
 
 export type CallControlsProps = {
   className?: string;
@@ -330,7 +334,6 @@ export type CallControlsProps = {
 /**
  * CallControls provides a customizable UI for stream call controls
  * Uses the BaseCallControls headless component for functionality
- * Now leverages the SDK components for media controls
  */
 const CallControls: React.FC<CallControlsProps> = ({
   className = "",
@@ -344,7 +347,17 @@ const CallControls: React.FC<CallControlsProps> = ({
   onReactionsToggle,
   onRecordToggle,
 }) => {
-  // Render the modern UI design using SDK components
+  // Create custom icons for the CameraToggleButton to match our design
+  const cameraIcons = {
+    cameraOn: <Icon name="video" className="text-white" />,
+    cameraOff: <Icon name="videoOff" className="text-white" />,
+    switchCamera: <Icon name="Poll" className="text-primary" size={16} />,
+    loading: (
+      <Icon name="usdt" className="text-primary animate-spin" size={16} />
+    ),
+  };
+
+  // Render the modern UI design
   const renderCallControls = (props: CallControlsRenderProps) => {
     const {
       canAccessMediaControls,
@@ -358,19 +371,16 @@ const CallControls: React.FC<CallControlsProps> = ({
       requestToSpeak,
       userType,
       toggleMic,
-      toggleCamera,
       toggleScreenShare,
-      toggleRecording
+      toggleRecording,
     } = props;
 
-    // Define custom icons for camera toggle
-    const cameraIcons = {
-      cameraOn: <Icon name="video" className="text-white" />,
-      cameraOff: <Icon name="videoOff" className="text-white" />,
-      switchCamera: <Icon name="Poll" className="text-primary" size={16} />,
-      loading: <Icon name="usdt" className="text-primary animate-spin" size={16} />
-    };
-
+    console.log({
+      isMicEnabled,
+      isCameraEnabled,
+      isScreenSharingEnabled,
+      isRecording,
+    });
     return (
       <div className={`w-full max-6xl mx-auto ${className}`} style={style}>
         <div className="flex items-center justify-between">
@@ -384,24 +394,29 @@ const CallControls: React.FC<CallControlsProps> = ({
             </div>
             <div className="bg-white flex flex-row items-center justify-between p-0.5 rounded-2xl gap-x-2">
               <Icon name="circle" className="text-[#F5F5F5]" size={12} />
-              <div className="bg-[#DCCCF63D] p-2 rounded-xl" onClick={onAgendaToggle}>
+              <div
+                className="bg-[#DCCCF63D] p-2 rounded-xl"
+                onClick={onAgendaToggle}
+              >
                 <Icon name="more" className="text-primary" />
               </div>
             </div>
           </div>
 
           {/* Record button */}
-          {userType === "host" && (
-            components?.RecordButton ? (
-              <components.RecordButton isRecording={isRecording} toggle={toggleRecording} />
+          {userType === "host" &&
+            (components?.RecordButton ? (
+              <components.RecordButton
+                isRecording={isRecording}
+                toggle={toggleRecording}
+              />
             ) : (
               <RecordControl
                 isRecording={isRecording}
                 toggleRecording={toggleRecording}
                 showLabel={false}
               />
-            )
-          )}
+            ))}
 
           {/* Icon group - main middle section */}
           <div className="bg-[#F2EFFE] rounded-full py-2 px-3 flex items-center space-x-2">
@@ -412,7 +427,10 @@ const CallControls: React.FC<CallControlsProps> = ({
                 onClick={requestToSpeak}
               >
                 {components?.RaiseHandButton ? (
-                  <components.RaiseHandButton requested={false} request={requestToSpeak} />
+                  <components.RaiseHandButton
+                    requested={false}
+                    request={requestToSpeak}
+                  />
                 ) : (
                   <div className="bg-[#DCCCF63D] rounded-2xl h-full flex flex-col items-center justify-center">
                     <Icon name="hand" className="text-primary" />
@@ -424,7 +442,10 @@ const CallControls: React.FC<CallControlsProps> = ({
             {isGuest && hasPendingRequest && (
               <div className="bg-white p-0.5 rounded-2xl cursor-pointer h-[44px] w-[44px]">
                 {components?.RaiseHandButton ? (
-                  <components.RaiseHandButton requested={true} request={() => {}} />
+                  <components.RaiseHandButton
+                    requested={true}
+                    request={() => {}}
+                  />
                 ) : (
                   <div className="bg-[#DCCCF63D] rounded-2xl h-full flex flex-col items-center justify-center">
                     <Icon name="hand" className="text-green-500" />
@@ -433,59 +454,59 @@ const CallControls: React.FC<CallControlsProps> = ({
               </div>
             )}
 
-            {/* Media Controls - Using SDK Components */}
-            {canAccessMediaControls && (
-              <>
-                {/* Screen share */}
-                {components?.ScreenShareButton ? (
-                  <components.ScreenShareButton 
-                    enabled={isScreenSharingEnabled} 
-                    toggle={toggleScreenShare} 
-                  />
-                ) : (
-                  <ScreenShareControl
-                    showLabel={false}
-                    onChange={(enabled) => toggleScreenShare()}
-                  />
-                )}
+            {/* Screen share */}
+            {canAccessMediaControls &&
+              (components?.ScreenShareButton ? (
+                <components.ScreenShareButton
+                  enabled={isScreenSharingEnabled}
+                  toggle={toggleScreenShare}
+                />
+              ) : (
+                <ScreenShareControl
+                  showLabel={false}
+                  onChange={() => toggleScreenShare()}
+                />
+              ))}
 
-                {/* Microphone */}
-                {components?.MicButton ? (
-                  <components.MicButton 
-                    enabled={isMicEnabled} 
-                    toggle={toggleMic} 
-                  />
-                ) : (
-                  <MicrophoneControl
-                    showLabel={false}
-                    onChange={(enabled) => toggleMic()}
-                  />
-                )}
+            {/* Microphone */}
+            {canAccessMediaControls &&
+              (components?.MicButton ? (
+                <components.MicButton
+                  enabled={isMicEnabled}
+                  toggle={toggleMic}
+                />
+              ) : (
+                <MicrophoneControl
+                  showLabel={false}
+                  onChange={() => toggleMic()}
+                />
+              ))}
 
-                {/* Camera - Using our enhanced CameraToggle component */}
-                {components?.CameraButton ? (
-                  <components.CameraButton 
-                    enabled={isCameraEnabled} 
-                    toggle={toggleCamera} 
+            {/* Camera - Using our new LiveKit-compatible camera toggle */}
+            {canAccessMediaControls &&
+              (components?.CameraButton ? (
+                <div className="bg-white flex flex-row items-center justify-between p-0.5 rounded-2xl gap-x-2">
+                  <components.CameraButton
+                    enabled={isCameraEnabled}
+                    toggle={() => {}}
                   />
-                ) : (
-                  <CameraToggle
-                    showLabel={false}
-                    customIcons={cameraIcons}
-                    onChange={(enabled) => toggleCamera()}
-                    onError={(error) => console.error('Camera error:', error)}
-                  />
-                )}
-              </>
-            )}
-            
+                </div>
+              ) : (
+                <CameraToggle
+                  customIcons={cameraIcons}
+                  onError={(error) => console.error("Camera error:", error)}
+                />
+              ))}
+
             {/* Reactions */}
-            <div 
+            <div
               className="bg-white p-0.5 rounded-2xl cursor-pointer h-[44px] w-[44px]"
               onClick={onReactionsToggle}
             >
               {components?.ReactionsButton ? (
-                <components.ReactionsButton onClick={onReactionsToggle || (() => {})} />
+                <components.ReactionsButton
+                  onClick={onReactionsToggle || (() => {})}
+                />
               ) : (
                 <div className="bg-[#DCCCF63D] rounded-2xl h-full flex flex-col items-center justify-center">
                   <Icon name="smiley" className="text-yellow-400" />
@@ -494,7 +515,7 @@ const CallControls: React.FC<CallControlsProps> = ({
             </div>
 
             {/* Chat */}
-            <div 
+            <div
               className="bg-white p-0.5 rounded-2xl cursor-pointer h-[44px] w-[44px]"
               onClick={onChatToggle}
             >
@@ -509,7 +530,7 @@ const CallControls: React.FC<CallControlsProps> = ({
           </div>
 
           {/* End call button */}
-          <div 
+          <div
             className="rounded-2xl p-0.5 bg-[#D40000] flex flex-row text-white items-center gap-x-2 cursor-pointer"
             onClick={handleDisconnectClick}
           >
