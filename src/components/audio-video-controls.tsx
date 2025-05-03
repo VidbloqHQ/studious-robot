@@ -480,6 +480,7 @@ export const ScreenShareControl: React.FC<MediaControlProps> = ({
   icon,
 }) => {
   const [isEnabled, setIsEnabled] = useState(false);
+  const { localParticipant } = useLocalParticipant();
   
   const handleChange = (enabled: boolean) => {
     setIsEnabled(enabled);
@@ -489,7 +490,19 @@ export const ScreenShareControl: React.FC<MediaControlProps> = ({
   };
   
   return (
-    <div className={`bg-white p-0.5 rounded-2xl cursor-pointer h-[44px] w-[44px] ${className}`} style={style}>
+    <div className={`bg-white p-0.5 rounded-2xl cursor-pointer h-[44px] w-[44px] ${className}`} style={style}
+    onClick={() => {
+      // Find the track publication and toggle directly
+      const publication = localParticipant?.getTrackPublication(Track.Source.ScreenShare);
+      if (publication) {
+        if (publication.isMuted) {
+          publication.unmute();
+        } else {
+          publication.mute();
+        }
+      }
+    }}
+    >
       <TrackToggle
         source={Track.Source.ScreenShare}
         showIcon={false}

@@ -347,15 +347,6 @@ const CallControls: React.FC<CallControlsProps> = ({
   onReactionsToggle,
   onRecordToggle,
 }) => {
-  // Create custom icons for the CameraToggleButton to match our design
-  const cameraIcons = {
-    cameraOn: <Icon name="video" className="text-white" />,
-    cameraOff: <Icon name="videoOff" className="text-white" />,
-    switchCamera: <Icon name="Poll" className="text-primary" size={16} />,
-    loading: (
-      <Icon name="usdt" className="text-primary animate-spin" size={16} />
-    ),
-  };
 
   // Render the modern UI design
   const renderCallControls = (props: CallControlsRenderProps) => {
@@ -478,7 +469,6 @@ const CallControls: React.FC<CallControlsProps> = ({
               ) : (
                 <MicrophoneControl
                   showLabel={false}
-                  onChange={() => toggleMic()}
                 />
               ))}
 
@@ -493,7 +483,7 @@ const CallControls: React.FC<CallControlsProps> = ({
                 </div>
               ) : (
                 <CameraToggle
-                  customIcons={cameraIcons}
+                  showLabel={false}
                   onError={(error) => console.error("Camera error:", error)}
                 />
               ))}
