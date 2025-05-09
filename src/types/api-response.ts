@@ -10,7 +10,7 @@ export interface TokenResponse {
   userType: UserType;
 }
 
-export interface GetStreamResponse {
+export interface StreamResponse {
   id: string;
   name: string;
   userId: string;
@@ -53,6 +53,19 @@ export interface CreateStreamResponse {
   isLive?: boolean;
   startedAt?: string;
   endedAt?: string;
+}
+
+export interface RecordingStartResponse {
+  message: string;
+  recordingId: string;
+  streamId: string;
+}
+
+export interface RecordingStopResponse {
+  message: string;
+  streamId: string;
+  recordId: string;
+  recordLink?: string;
 }
 
 // {

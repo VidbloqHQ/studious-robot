@@ -19,6 +19,27 @@
   }
 }
 
+@keyframes floatUp {
+  0% {
+    transform: translateY(100px);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-300px);
+    opacity: 0;
+  }
+}
+
+.animate-float-up {
+  animation: floatUp 3s ease-out forwards;
+}
+
 :root {
   /* Base colors - only these map to tenant properties */
   --sdk-primary-color: #4300b1;

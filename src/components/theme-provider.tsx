@@ -44,11 +44,11 @@ const applyThemeVariables = (tenantData: Tenant) => {
   );
   document.documentElement.style.setProperty(
     "--sdk-text-primary-color",
-    tenantData.textPrimaryColor || "#000000"
+    tenantData.textPrimaryColor || "#ffffff"
   );
   document.documentElement.style.setProperty(
     "--sdk-text-secondary-color",
-    tenantData.textSecondaryColor || "#666666"
+    tenantData.textSecondaryColor || "#000000"
   );
 
   // Apply theme mode (light/dark)

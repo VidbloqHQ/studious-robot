@@ -29,6 +29,7 @@ export default {
         // Background colors
         'bg-primary': 'var(--sdk-bg-primary-color)',
         'bg-secondary': 'var(--sdk-bg-secondary-color)',
+        'modal-black': 'rgba(0,0,0,0.4)',
       }
     },
   },

@@ -1,14 +1,18 @@
 import React, { ReactElement } from "react";
 import {
-  // useTracks,
   VideoTrack,
   AudioTrack,
-  // useRoomContext,
 } from "@livekit/components-react";
 import { Track } from "livekit-client";
-import { ParticipantMetadata, ParticipantTrack } from "../types";
+import { ParticipantTrack } from "../types";
+import { 
+  checkParticipantMicEnabled, 
+  checkIfLocalParticipant,
+  getParticipantMetadata 
+} from "../utils/index";
 import ParticipantView from "./participant";
 import { useLivestream } from "../hooks/useLivestream";
+import ParticipantControls from "./participant-controls";
 
 interface LivestreamViewProps {
   hasAgenda?: boolean;
@@ -29,90 +33,129 @@ export default function LivestreamView({
     screenSharerIdentity,
     mainContent,
     sidebarContent,
-    // participantsByType,
-    // room
+    room
   } = useLivestream();
 
-  // Function to render a participant video/avatar - explicitly typing for TypeScript
-  const renderParticipant = (
-    track: ParticipantTrack,
-    size: "large" | "small" = "large"
-  ): ReactElement | null => {
-    if (!track.participant) return null;
 
-    const metadata: ParticipantMetadata = track.participant.metadata
-      ? JSON.parse(track.participant.metadata)
-      : {};
-    const isCameraOn = track.publication && !track.publication.isMuted;
-    const isScreenShare = track.source === Track.Source.ScreenShare;
-    const isActive = track.participant.identity === activeSpeaker;
-    const uniqueKey = `${track.participant.sid}-${track.source}-${size}`;
-    const userName = metadata.userName || track.participant.identity;
-    const userType = metadata.userType || "guest";
+const renderParticipant = (
+  track: ParticipantTrack,
+  size: "large" | "small" = "large"
+): ReactElement | null => {
+  if (!track.participant) return null;
 
-    // Determine classes based on size bg-green-900 border-red-500 border-4
-    const containerClasses =
-      size === "large"
-        ? "relative rounded-lg overflow-hidden h-full w-full bg-purple-900"
-        : "relative rounded-lg overflow-hidden bg-purple-900 h-full w-full";
+  // Get all metadata at once using the utility
+  const metadata = getParticipantMetadata(track.participant);
+  
+  const isCameraOn = track.publication && !track.publication.isMuted;
+  
+  // Use the utility function for microphone status
+  const isMicrophoneOn = checkParticipantMicEnabled(track.participant);
+  
+  const isScreenShare = track.source === Track.Source.ScreenShare;
+  const isActive = track.participant.identity === activeSpeaker;
+  const uniqueKey = `${track.participant.sid}-${track.source}-${size}`;
+  const { userName, userType } = metadata;
+  
+  // Use the utility function for checking if local participant
+  const isLocalParticipant = checkIfLocalParticipant(track.participant, room);
 
-    return (
-      <div
-        key={uniqueKey}
-        className={`${containerClasses} ${
-          isActive ? "border border-blue-500" : ""
-        }`}
-      >
-        {isScreenShare ? (
-          track.publication && !track.publication.isMuted ? (
+  // Determine classes based on size
+  const containerClasses =
+    size === "large"
+      ? "relative rounded-lg overflow-hidden h-full w-full bg-purple-900"
+      : "relative rounded-lg overflow-hidden bg-purple-900 h-full w-full";
+
+  // Calculate max-height based on size
+  const maxHeightStyle = size === "small" 
+    ? { maxHeight: "200px" } // Smaller height for small tiles
+    : { maxHeight: "calc(100vh - 160px)" }; // Larger height for main view, but constrained
+
+  return (
+    <div
+      key={uniqueKey}
+      className={`${containerClasses} ${
+        isActive ? "border border-blue-500" : ""
+      }`}
+    >
+      {isScreenShare ? (
+        track.publication && !track.publication.isMuted ? (
+          // Screen share content with max-height constraint
+          <div className="relative h-full w-full" style={maxHeightStyle}>
             <VideoTrack
               trackRef={track}
               className="h-full w-full object-contain"
             />
-          ) : null
-        ) : isCameraOn ? (
-          <div className="aspect-video h-full w-full">
-            <VideoTrack
-              trackRef={track}
-              className="h-full w-full object-cover"
-            />
           </div>
-        ) : (
-          <ParticipantView participant={track.participant} />
-        )}
+        ) : null
+      ) : (
+        <div className="h-full w-full flex items-center justify-center">
+          {isCameraOn ? (
+            // KEY FIX: Explicitly limit the video height with max-height
+            <div className="relative w-full h-full" style={maxHeightStyle}>
+              <VideoTrack
+                trackRef={track}
+                className="w-full h-full object-cover"
+              />
+              
+              {/* Add ParticipantControls on video view */}
+              <ParticipantControls
+                participant={track.participant}
+                isLocal={isLocalParticipant}
+                isMicrophoneEnabled={isMicrophoneOn}
+                isCameraEnabled={isCameraOn}
+                className={size === "small" ? "scale-75 origin-top-left" : ""}
+                onGiftClick={(participant) => {
+                  console.log("Gift clicked for", participant.identity);
+                }}
+              />
+            </div>
+          ) : (
+            // Camera off - ParticipantView (already has correct sizing)
+            <ParticipantView 
+              participant={track.participant}
+              isLocal={isLocalParticipant}
+              isMicrophoneEnabled={isMicrophoneOn} 
+              isCameraEnabled={isCameraOn}
+              avatarSize={size === "small" ? "small" : "medium"}
+              onGiftClick={(participant) => {
+                console.log("Gift clicked for", participant.identity);
+              }}
+            />
+          )}
+        </div>
+      )}
 
-        {track.publication?.track && <AudioTrack trackRef={track} />}
+      {track.publication?.track && <AudioTrack trackRef={track} />}
 
-        {/* User type badge */}
-        <div
-          className={`absolute top-2 right-2 px-2 py-1 rounded-md text-xs text-white ${
-            userType === "host"
-              ? "bg-purple-700"
-              : userType === "co-host"
-              ? "bg-purple-700"
-              : userType === "temp-host"
-              ? "bg-purple-700"
-              : "bg-purple-700"
-          }`}
-        >
-          {userType === "host"
-            ? "Host"
+      {/* User type badge */}
+      <div
+        className={`absolute top-2 right-2 px-2 py-1 rounded-md text-xs text-white ${
+          userType === "host"
+            ? "bg-purple-700"
             : userType === "co-host"
-            ? "Co-Host"
+            ? "bg-purple-700"
             : userType === "temp-host"
-            ? "Temp-Host"
-            : "Guest"}
-        </div>
-
-        {/* Name at bottom */}
-        <div className="absolute bottom-2 left-2 bg-black/50 px-2 py-1 rounded text-white text-xs">
-          {userName}
-        </div>
+            ? "bg-purple-700"
+            : "bg-purple-700"
+        } z-10`}
+      >
+        {userType === "host"
+          ? "Host"
+          : userType === "co-host"
+          ? "Co-Host"
+          : userType === "temp-host"
+          ? "Temp-Host"
+          : "Guest"}
       </div>
-    );
-  };
 
-  // Render agenda section - explicitly typing for TypeScript
+      {/* Name at bottom */}
+      <div className="absolute bottom-2 left-2 bg-black/50 px-2 py-1 rounded text-white text-xs z-10">
+        {userName}
+      </div>
+    </div>
+  );
+};
+  
   const renderAgenda = (): ReactElement => {
     return (
       <div className="flex flex-col h-full bg-white rounded-lg overflow-hidden">

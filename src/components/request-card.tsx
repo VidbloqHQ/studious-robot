@@ -1,63 +1,61 @@
 // import { useState } from "react";
-// import {
-//   useStreamContext,
-//   useTenantContext,
-//   useRequirePublicKey,
-// } from "../hooks/index";
-// import { GuestRequest } from "../types";
+// import { useStreamContext, useRequirePublicKey, useTenantContext } from "../hooks/index";
+// import { GuestRequest } from "../types/index";
 
-// type RequestCardProps = {
+// interface RequestCardProps {
 //   request: GuestRequest;
-// };
+// }
 
 // const RequestCard = ({ request }: RequestCardProps) => {
 //   const { websocket, roomName, userType } = useStreamContext();
-//   const { participantId, name } = request;
+//   const { participantId, name, walletAddress } = request;
 //   const [isProcessing, setIsProcessing] = useState(false);
+//   const [error, setError] = useState<string | null>(null);
 //   const { publicKey } = useRequirePublicKey();
 //   const { apiClient } = useTenantContext();
 
 //   // Handle accepting a guest's request to speak
 //   const handleAccept = async () => {
 //     if (!websocket || !websocket.isConnected) {
-//       console.warn("WebSocket not connected - cannot accept request");
+//       setError("WebSocket not connected");
 //       return;
 //     }
 
 //     if (!publicKey) {
-//       console.warn("Public key not available");
+//       setError("Public key not available");
+//       return;
+//     }
+
+//     if (!walletAddress) {
+//       setError("Guest wallet address is missing");
 //       return;
 //     }
 
 //     setIsProcessing(true);
+//     setError(null);
 
 //     try {
-//       console.log(
-//         `Accepting speaking request for ${participantId} in ${roomName}`
-//       );
-
-//       // Call your API endpoint through the apiClient
-//       const data = {
+//       console.log(`Accepting speaking request for ${participantId} in ${roomName}`);
+//       console.log(`Guest wallet address: ${walletAddress}`);
+      
+//       // Use the API client to make the request
+//       const response = await apiClient.post("/participant/update-permission", {
 //         participantId,
-//         streamId:roomName,
-//         wallet: publicKey.toString(),
-//         action: "promote",
-//       };
-//       const permissionRes = await apiClient.post(
-//         "/participant/update-permission",
-//         data
-//       );
+//         streamId: roomName,
+//         wallet: publicKey.toString(), // Host's wallet
+//         participantWallet: walletAddress, // Guest's wallet
+//         action: "promote"
+//       });
 
-//       console.log("Permission update successful:", permissionRes);
-
-//       // After API call succeeds, the WebSocket notifications will be sent by the server
-
-//       // Clear processing state after completion
+//       console.log("Permission update successful:", response);
+      
+//       // The server will send WebSocket events
 //       setTimeout(() => {
 //         setIsProcessing(false);
 //       }, 1000);
 //     } catch (error) {
 //       console.error("Error accepting guest request:", error);
+//       setError(error instanceof Error ? error.message : "Unknown error");
 //       setIsProcessing(false);
 //     }
 //   };
@@ -65,26 +63,25 @@
 //   // Handle rejecting a guest's request to speak
 //   const handleReject = async () => {
 //     if (!websocket || !websocket.isConnected) {
-//       console.warn("WebSocket not connected - cannot reject request");
+//       setError("WebSocket not connected");
 //       return;
 //     }
 
 //     setIsProcessing(true);
-
+//     setError(null);
+    
 //     try {
-//       console.log(
-//         `Rejecting speaking request for ${participantId} in ${roomName}`
-//       );
-
-//       // For rejection, we can simply use the WebSocket method to remove the request
-//       // No need to change permissions since they're staying as a guest
+//       console.log(`Rejecting speaking request for ${participantId} in ${roomName}`);
+      
+//       // Simply use WebSocket to remove the request
 //       websocket.returnToGuest(roomName, participantId);
-
+      
 //       setTimeout(() => {
 //         setIsProcessing(false);
 //       }, 1000);
 //     } catch (error) {
 //       console.error("Error rejecting guest request:", error);
+//       setError(error instanceof Error ? error.message : "Unknown error");
 //       setIsProcessing(false);
 //     }
 //   };
@@ -96,12 +93,17 @@
 //     <div className="bg-green-800 rounded-lg shadow-lg p-4 mb-2 w-60">
 //       <h3 className="text-md font-semibold">{name || participantId}</h3>
 //       <p className="text-xs text-gray-500 mb-4">Wants to speak</p>
+      
+//       {error && (
+//         <p className="text-red-400 text-xs mb-2">{error}</p>
+//       )}
+      
 //       <div className="flex justify-between">
 //         <button
 //           onClick={handleReject}
 //           disabled={isProcessing}
 //           className={`bg-red-100 text-red-700 px-3 py-1 rounded-full text-xs hover:bg-red-200 transition-colors ${
-//             isProcessing ? "opacity-50 cursor-not-allowed" : ""
+//             isProcessing ? 'opacity-50 cursor-not-allowed' : ''
 //           }`}
 //         >
 //           Decline
@@ -110,7 +112,7 @@
 //           onClick={handleAccept}
 //           disabled={isProcessing}
 //           className={`bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs hover:bg-green-200 transition-colors ${
-//             isProcessing ? "opacity-50 cursor-not-allowed" : ""
+//             isProcessing ? 'opacity-50 cursor-not-allowed' : ''
 //           }`}
 //         >
 //           Accept
@@ -122,21 +124,37 @@
 
 // export default RequestCard;
 
-import { useState } from "react";
-import { useStreamContext, useRequirePublicKey, useTenantContext } from "../hooks/index";
-import { GuestRequest } from "../types/index";
+import { useState, useEffect } from "react";
+import { useStreamContext } from "../hooks";
+import { GuestRequest } from "../types";
+import { useRequirePublicKey } from "../hooks";
+import { useTenantContext } from "../hooks";
 
 interface RequestCardProps {
   request: GuestRequest;
+  onRemove: (participantId: string) => void;
 }
 
-const RequestCard = ({ request }: RequestCardProps) => {
+const RequestCard = ({ request, onRemove }: RequestCardProps) => {
   const { websocket, roomName, userType } = useStreamContext();
   const { participantId, name, walletAddress } = request;
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isRemoved, setIsRemoved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { publicKey } = useRequirePublicKey();
   const { apiClient } = useTenantContext();
+
+  // Prevent rendering if card is already removed
+  useEffect(() => {
+    return () => {
+      console.log(`RequestCard for ${participantId} unmounted`);
+    };
+  }, [participantId]);
+  
+  // If the card is marked as removed, don't render it
+  if (isRemoved) {
+    return null;
+  }
 
   // Handle accepting a guest's request to speak
   const handleAccept = async () => {
@@ -162,8 +180,11 @@ const RequestCard = ({ request }: RequestCardProps) => {
       console.log(`Accepting speaking request for ${participantId} in ${roomName}`);
       console.log(`Guest wallet address: ${walletAddress}`);
       
-      // Use the API client to make the request
-      const response = await apiClient.post("/participant/update-permission", {
+      // Immediately mark as removed to prevent UI flicker
+      setIsRemoved(true);
+      onRemove(participantId);
+      
+       await apiClient.post("/participant/update-permission", {
         participantId,
         streamId: roomName,
         wallet: publicKey.toString(), // Host's wallet
@@ -171,14 +192,15 @@ const RequestCard = ({ request }: RequestCardProps) => {
         action: "promote"
       });
 
-      console.log("Permission update successful:", response);
+      console.log("Permission update successful for", participantId);
       
-      // The server will send WebSocket events
-      setTimeout(() => {
-        setIsProcessing(false);
-      }, 1000);
+      // No need to update state as the component is already not rendering
+      setIsProcessing(false);
     } catch (error) {
       console.error("Error accepting guest request:", error);
+      
+      // If there was an error, we should re-show the card
+      setIsRemoved(false);
       setError(error instanceof Error ? error.message : "Unknown error");
       setIsProcessing(false);
     }
@@ -197,14 +219,20 @@ const RequestCard = ({ request }: RequestCardProps) => {
     try {
       console.log(`Rejecting speaking request for ${participantId} in ${roomName}`);
       
-      // Simply use WebSocket to remove the request
+      // Immediately mark as removed to prevent UI flicker
+      setIsRemoved(true);
+      onRemove(participantId);
+      
+      // Use WebSocket to remove the request
       websocket.returnToGuest(roomName, participantId);
       
-      setTimeout(() => {
-        setIsProcessing(false);
-      }, 1000);
+      // No need to update state as the component is already not rendering
+      setIsProcessing(false);
     } catch (error) {
       console.error("Error rejecting guest request:", error);
+      
+      // If there was an error, we should re-show the card
+      setIsRemoved(false);
       setError(error instanceof Error ? error.message : "Unknown error");
       setIsProcessing(false);
     }
@@ -212,7 +240,7 @@ const RequestCard = ({ request }: RequestCardProps) => {
 
   // Only show the request card if the current user is a host
   if (userType !== "host") return null;
-
+  
   return (
     <div className="bg-green-800 rounded-lg shadow-lg p-4 mb-2 w-60">
       <h3 className="text-md font-semibold">{name || participantId}</h3>

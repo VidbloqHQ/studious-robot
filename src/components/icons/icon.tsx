@@ -77,11 +77,7 @@ export const Icon: React.FC<IconProps> = ({
             />
           );
         } else if (type === 'hybrid') {
-          // For hybrid icons, you'd need to store stroke/fill info per path
           const pathFill = iconData.fill?.[index] || (index === 1 ? color : resolvedFill);
-          // Change this line:
-          // const pathStroke = iconFill?.[index] ? null : color;
-          // To this:
           const pathStroke = iconFill?.[index] ? undefined : color;
           
           return (
@@ -115,50 +111,3 @@ export const Icon: React.FC<IconProps> = ({
 };
 
 export default Icon;
-
-  // return (
-  //   <svg
-  //     width={currentSize}
-  //     height={currentSize}
-  //     viewBox={viewBox}
-  //     xmlns="http://www.w3.org/2000/svg"
-  //     className={className}
-  //     {...props}
-  //   >
-  //     {paths.map((d, index) => {
-  //       if (type === "fill") {
-  //         // For fill-type icons
-  //         return <path key={index} d={d} fill={color || resolvedFill} />;
-  //       } else if (type === "hybrid") {
-  //         // For hybrid icons, you'd need to store stroke/fill info per path
-  //         const pathFill = iconData.fill?.[index] || resolvedFill;
-  //         const pathStroke = iconData.strokes?.[index] || color;
-
-  //         return (
-  //           <path
-  //             key={index}
-  //             d={d}
-  //             fill={index === 1 ? pathFill : "none"} // Second path is filled
-  //             stroke={pathStroke}
-  //             strokeWidth={strokeWidth}
-  //             strokeLinecap="round"
-  //             strokeLinejoin="round"
-  //           />
-  //         );
-  //       } else {
-  //         // For stroke-type icons
-  //         return (
-  //           <path
-  //             key={index}
-  //             d={d}
-  //             stroke={color}
-  //             strokeWidth={strokeWidth}
-  //             strokeLinecap="round"
-  //             strokeLinejoin="round"
-  //             fill={resolvedFill}
-  //           />
-  //         );
-  //       }
-  //     })}
-  //   </svg>
-  // );

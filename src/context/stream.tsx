@@ -11,7 +11,7 @@ import {
   GuestRequest,
   Agenda,
   TokenResponse,
-  GetStreamResponse,
+  StreamResponse,
 } from "../types";
 
 type StreamContextType = {
@@ -267,7 +267,7 @@ export const StreamProvider = ({
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const streamData = await apiClient.get<GetStreamResponse>(
+        const streamData = await apiClient.get<StreamResponse>(
           `/stream/${roomName}`
         );
         if (streamData.title || streamData.callType) {

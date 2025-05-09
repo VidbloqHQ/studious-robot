@@ -35,7 +35,7 @@ const PrejoinComponent: React.FC = () => {
       )}
       
       <div>
-        <div className="bg-[var(--sdk-primary-bg-color)] h-[200px] w-[88%] lg:h-[355px] lg:w-[650px] mx-auto relative rounded-3xl">
+        <div className="border border-primary-light h-[200px] w-[88%] lg:h-[355px] lg:w-[650px] mx-auto relative rounded-3xl">
           {/* Video preview */}
           {canControlMedia && previewTracks.videoTrack && (
             <video
@@ -48,11 +48,11 @@ const PrejoinComponent: React.FC = () => {
           )}
           
           {/* Controls bar */}
-          <div className="flex flex-row items-center justify-between w-[92%] lg:w-[92%] absolute bottom-4 lg:bottom-6 text-[var(--sdk-text-color)] left-1/2 transform -translate-x-1/2">
+          <div className="flex flex-row items-center justify-between w-[92%] lg:w-[92%] absolute bottom-4 lg:bottom-6 text-text-primary left-1/2 transform -translate-x-1/2">
             {/* Nickname input */}
             <input
               type="text"
-              className="rounded-full focus:outline-none border border-[var(--sdk-primary-border-color)] bg-[var(--sdk-secondary-btn-color)] w-[55%] lg:w-[50%] p-1.5 lg:p-2 text-sm"
+              className="rounded-full focus:outline-none border border-primary-light text-text-secondary w-[55%] lg:w-[50%] p-1.5 lg:p-2 text-sm"
               placeholder="Your Nickname"
               value={nickname}
               onChange={(e) => setNickname(e.target.value)}
@@ -62,18 +62,20 @@ const PrejoinComponent: React.FC = () => {
             {canControlMedia && (
               <div className="flex flex-row items-center justify-between w-[25%] lg:w-[14%]">
                 {/* Audio toggle */}
-                <div className="rounded-full w-[35px] h-[35px] p-2 lg:w-[40px] lg:h-[40px] lg:p-2.5 bg-gradient-to-br from-primary to-second-gradient">
+                <div className="rounded-full w-[35px] h-[35px] p-2 lg:w-[40px] lg:h-[40px] lg:p-2.5 bg-primary text-text-primary">
                   <TrackToggle
                     source={Track.Source.Microphone}
                     onChange={handleAudioToggle}
+                    className="!p-0"
                   />
                 </div>
                 
                 {/* Video toggle */}
-                <div className="rounded-full w-[35px] h-[35px] p-2 lg:w-[40px] lg:h-[40px] lg:p-2.5 bg-gradient-to-br from-primary to-second-gradient">
+                <div className="rounded-full w-[35px] h-[35px] p-2 lg:w-[40px] lg:h-[40px] lg:p-2.5 bg-primary text-text-primary">
                   <TrackToggle
                     source={Track.Source.Camera}
                     onChange={handleVideoToggle}
+                    className="!p-0"
                   />
                 </div>
               </div>
@@ -83,7 +85,7 @@ const PrejoinComponent: React.FC = () => {
         
         {/* Join button */}
         <div
-          className="w-[52%] lg:w-[15%] mx-auto mt-10 text-[var(--sdk-text-color)]"
+          className="w-[52%] lg:w-[15%] mx-auto mt-10 text-text-primary"
         >
           <button 
             className={`bg-primary py-3.5 lg:py-3 rounded-full w-full text-sm ${isLoading ? 'opacity-70 cursor-not-allowed' : ''}`}

@@ -143,6 +143,24 @@ export type Agenda  = {
   customContent?: CustomContent;
 }
 
+export interface AgendaUpdate {
+  wallet: string;
+  title?: string;
+  description?: string;
+  timeStamp?: number;
+  options?: string[];                 // For Poll agenda
+  questions?: Array<{                 // For Quiz agenda
+    questionText: string;
+    options: string[];
+    correctAnswer: string;
+    isMultiChoice?: boolean;
+    points?: number;
+  }>;
+  assetType?: string;                 // For Transaction/Giveaway agenda
+  topic?: string;                     // For Q&A agenda
+  customData?: Record<string, unknown>;   // For Custom agenda
+}
+
 export type Participant = {
   id: string;
   userName: string;
@@ -151,6 +169,7 @@ export type Participant = {
   joinedAt?: string;
   liveStreamId?: string;
   userType: UserType;
+  avatarUrl?: string;
 };
 
 export type Recipient = {

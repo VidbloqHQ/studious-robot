@@ -1,263 +1,347 @@
-import { useState, useEffect, useCallback } from "react";
-import { useStreamContext } from "./useStreamContext";
-import { useStreamAddons } from "./useStreamAddons";
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { useState } from 'react';
+import { useTenantContext } from './useTenantContext';
 
-// Define interfaces for quiz-related data
+interface QuizAnswer {
+  questionId: string;
+  answer: string;
+  isCorrect: boolean;
+  pointsEarned?: number;
+}
+
+interface SubmitQuizAnswersRequest {
+  wallet: string;
+  answers: QuizAnswer[];
+  totalScore: number;
+}
+
+interface SubmitQuizAnswersResponse {
+  message: string;
+  totalScore: number;
+  answersSubmitted: number;
+}
+
+interface UseSubmitQuizAnswersReturn {
+  submitQuizAnswers: (agendaId: string, data: SubmitQuizAnswersRequest) => Promise<SubmitQuizAnswersResponse | null>;
+  isLoading: boolean;
+  error: Error | null;
+  response: SubmitQuizAnswersResponse | null;
+}
+
+/**
+ * Hook for submitting answers to a quiz
+ * @returns Object containing submitQuizAnswers function, loading state, error state, and response data
+ */
+export const useSubmitQuizAnswers = (): UseSubmitQuizAnswersReturn => {
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [error, setError] = useState<Error | null>(null);
+  const [response, setResponse] = useState<SubmitQuizAnswersResponse | null>(null);
+  
+  // Get the API client from context
+  const { apiClient } = useTenantContext();
+
+  /**
+   * Submit answers to a quiz
+   * @param agendaId - ID of the quiz agenda
+   * @param data - Quiz answers data including wallet, answers array, and total score
+   * @returns Response data or null if an error occurred
+   */
+  const submitQuizAnswers = async (
+    agendaId: string, 
+    data: SubmitQuizAnswersRequest
+  ): Promise<SubmitQuizAnswersResponse | null> => {
+    if (!agendaId) {
+      setError(new Error('Agenda ID is required'));
+      return null;
+    }
+    
+    if (!data.wallet) {
+      setError(new Error('Wallet address is required'));
+      return null;
+    }
+    
+    if (!data.answers || !Array.isArray(data.answers) || data.answers.length === 0) {
+      setError(new Error('Quiz answers are required'));
+      return null;
+    }
+    
+    if (typeof data.totalScore !== 'number' || data.totalScore < 0) {
+      setError(new Error('Valid total score is required'));
+      return null;
+    }
+
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      // Use the API client to make the POST request to the /quiz/:agendaId endpoint
+      const submitResponse = await apiClient.post<SubmitQuizAnswersResponse>(
+        `/quiz/${agendaId}`, 
+        data
+      );
+      
+      setResponse(submitResponse);
+      return submitResponse;
+    } catch (err: any) {
+      const errorMessage = err.response?.data?.error || 'An unknown error occurred';
+      setError(new Error(errorMessage));
+      return null;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return {
+    submitQuizAnswers,
+    isLoading,
+    error,
+    response,
+  };
+};
+
+
 interface QuizQuestion {
   id: string;
   questionText: string;
   options: string[];
-  correctAnswer: string;
   isMultiChoice: boolean;
   points: number;
+  correctAnswer: string;
 }
 
-interface QuizData {
+interface QuizQuestionsResponse {
   id: string;
-  title: string;
-  description?: string;
+  title: string | null;
+  description: string | null;
   questions: QuizQuestion[];
-  timeLimit?: number; // Time limit per question in seconds
 }
 
-interface QuizResults {
-  quizId: string;
-  leaderboard: {
-    participantId: string;
-    userName: string;
-    totalPoints: number;
-    correctAnswers: number;
-    totalAnswers: number;
-  }[];
-  questions: QuizQuestion[];
-  totalParticipants: number;
+interface UseGetQuizQuestionsReturn {
+  getQuizQuestions: (agendaId: string) => Promise<QuizQuestionsResponse | null>;
+  isLoading: boolean;
+  error: Error | null;
+  quiz: QuizQuestionsResponse | null;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-interface QuizAnswer {
-  questionId: string;
-  participantId: string;
-  answer: string;
-  isCorrect: boolean;
-  timeToAnswer?: number;
-}
+/**
+ * Hook for fetching quiz questions
+ * @returns Object containing getQuizQuestions function, loading state, error state, and quiz data
+ */
+export const useGetQuizQuestions = (): UseGetQuizQuestionsReturn => {
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [error, setError] = useState<Error | null>(null);
+  const [quiz, setQuiz] = useState<QuizQuestionsResponse | null>(null);
+  
+  // Get the API client from context
+  const { apiClient } = useTenantContext();
 
-type QuizStatus = 'idle' | 'starting' | 'active' | 'ended';
+  /**
+   * Get questions for a quiz
+   * @param agendaId - ID of the quiz agenda
+   * @returns Quiz questions or null if an error occurred
+   */
+  const getQuizQuestions = async (agendaId: string): Promise<QuizQuestionsResponse | null> => {
+    if (!agendaId) {
+      setError(new Error('Agenda ID is required'));
+      return null;
+    }
 
-export const useQuiz = () => {
-  const { websocket, roomName, identity } = useStreamContext();
-  const { activeAddons, startQuiz: startAddonQuiz, endQuiz: endAddonQuiz, submitQuizAnswer } = useStreamAddons();
-  
-  const [currentQuiz, setCurrentQuiz] = useState<QuizData | null>(null);
-  const [quizStatus, setQuizStatus] = useState<QuizStatus>('idle');
-  const [currentQuestion, setCurrentQuestion] = useState<QuizQuestion | null>(null);
-  const [questionIndex, setQuestionIndex] = useState(0);
-  const [timeRemaining, setTimeRemaining] = useState(0);
-  const [quizResults, setQuizResults] = useState<QuizResults | null>(null);
-  const [userAnswers, setUserAnswers] = useState<Record<string, string>>({});
-  const [isHost, setIsHost] = useState(false);
-  
-  // Check if quiz addon is active
-  const isQuizActive = activeAddons.Quiz.isActive;
-  
-  // Initialize quiz with a set of questions
-  const initializeQuiz = useCallback((quiz: QuizData) => {
-    setCurrentQuiz(quiz);
-    setQuizStatus('idle');
-    setQuestionIndex(0);
-    setUserAnswers({});
-    setQuizResults(null);
+    setIsLoading(true);
+    setError(null);
     
-    // Set first question as current
-    if (quiz.questions.length > 0) {
-      setCurrentQuestion(quiz.questions[0]);
-      if (quiz.timeLimit) {
-        setTimeRemaining(quiz.timeLimit);
-      }
-    }
-  }, []);
-  
-  // Start the quiz (host only)
-  const startQuiz = useCallback(() => {
-    if (!currentQuiz || !isHost) return;
-    
-    setQuizStatus('starting');
-    startAddonQuiz(roomName, currentQuiz);
-    
-    // Delay to allow clients to prepare
-    setTimeout(() => {
-      setQuizStatus('active');
-      // Start timer if there's a time limit
-      if (currentQuiz.timeLimit && currentQuiz.timeLimit > 0) {
-        setTimeRemaining(currentQuiz.timeLimit);
-      }
-    }, 3000);
-  }, [currentQuiz, isHost, roomName, startAddonQuiz]);
-  
-  // End the quiz (host only)
-  const endQuiz = useCallback((results?: QuizResults) => {
-    if (!isHost) return;
-    
-    const finalResults = results || {
-      quizId: currentQuiz?.id || '',
-      leaderboard: [],
-      questions: currentQuiz?.questions || [],
-      totalParticipants: 0
-    };
-    
-    setQuizStatus('ended');
-    setQuizResults(finalResults);
-    endAddonQuiz(roomName, finalResults);
-  }, [currentQuiz, isHost, roomName, endAddonQuiz]);
-  
-  // Submit an answer to a question
-  const submitAnswer = useCallback((questionId: string, answer: string) => {
-    if (!identity || !currentQuiz || quizStatus !== 'active') return;
-    
-    // Store answer locally
-    setUserAnswers(prev => ({
-      ...prev,
-      [questionId]: answer
-    }));
-    
-    // Submit to server
-    submitQuizAnswer(roomName, questionId, identity, answer);
-  }, [identity, currentQuiz, quizStatus, roomName, submitQuizAnswer]);
-  
-  // Advance to the next question (host only)
-  const nextQuestion = useCallback(() => {
-    if (!isHost || !currentQuiz || questionIndex >= currentQuiz.questions.length - 1) return;
-    
-    const newIndex = questionIndex + 1;
-    setQuestionIndex(newIndex);
-    setCurrentQuestion(currentQuiz.questions[newIndex]);
-    
-    // Reset timer if there's a time limit
-    if (currentQuiz.timeLimit && currentQuiz.timeLimit > 0) {
-      setTimeRemaining(currentQuiz.timeLimit);
-    }
-    
-    // Broadcast question change
-    websocket?.sendMessage('changeQuizQuestion', {
-      roomName,
-      questionIndex: newIndex,
-      question: currentQuiz.questions[newIndex]
-    });
-  }, [isHost, currentQuiz, questionIndex, roomName, websocket]);
-  
-  // Get previous question (host only)
-  const previousQuestion = useCallback(() => {
-    if (!isHost || !currentQuiz || questionIndex <= 0) return;
-    
-    const newIndex = questionIndex - 1;
-    setQuestionIndex(newIndex);
-    setCurrentQuestion(currentQuiz.questions[newIndex]);
-    
-    // Reset timer if there's a time limit
-    if (currentQuiz.timeLimit && currentQuiz.timeLimit > 0) {
-      setTimeRemaining(currentQuiz.timeLimit);
-    }
-    
-    // Broadcast question change
-    websocket?.sendMessage('changeQuizQuestion', {
-      roomName,
-      questionIndex: newIndex,
-      question: currentQuiz.questions[newIndex]
-    });
-  }, [isHost, currentQuiz, questionIndex, roomName, websocket]);
-  
-  // Set up WebSocket event listeners
-  useEffect(() => {
-    if (!websocket || !websocket.isConnected) return;
-    
-    // Handle quiz started event
-    const handleQuizStarted = (quiz: QuizData) => {
-      initializeQuiz(quiz);
-      setQuizStatus('active');
-    };
-    
-    // Handle quiz ended event
-    const handleQuizEnded = (results: QuizResults) => {
-      setQuizStatus('ended');
-      setQuizResults(results);
-    };
-    
-    // Handle question change
-    const handleQuestionChange = (data: {
-      questionIndex: number;
-      question: QuizQuestion;
-    }) => {
-      setQuestionIndex(data.questionIndex);
-      setCurrentQuestion(data.question);
+    try {
+      // Use the API client to make the GET request to the /quiz/:agendaId endpoint
+      const quizData = await apiClient.get<QuizQuestionsResponse>(`/quiz/${agendaId}`);
       
-      // Reset timer if applicable
-      if (currentQuiz?.timeLimit) {
-        setTimeRemaining(currentQuiz.timeLimit);
-      }
-    };
-    
-    // Add event listeners
-    websocket.addEventListener('quizStarted', handleQuizStarted);
-    websocket.addEventListener('quizEnded', handleQuizEnded);
-    websocket.addEventListener('changeQuizQuestion', handleQuestionChange);
-    
-    // Clean up event listeners
-    return () => {
-      websocket.removeEventListener('quizStarted', handleQuizStarted);
-      websocket.removeEventListener('quizEnded', handleQuizEnded);
-      websocket.removeEventListener('changeQuizQuestion', handleQuestionChange);
-    };
-  }, [websocket, currentQuiz, initializeQuiz]);
-  
-  // Timer effect for quiz questions
-  useEffect(() => {
-    if (quizStatus !== 'active' || !currentQuiz?.timeLimit || timeRemaining <= 0) return;
-    
-    const timer = setInterval(() => {
-      setTimeRemaining(prev => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          
-          // If host, automatically move to next question when time expires
-          if (isHost && questionIndex < (currentQuiz?.questions.length || 0) - 1) {
-            setTimeout(() => nextQuestion(), 1000);
-          }
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    
-    return () => clearInterval(timer);
-  }, [quizStatus, timeRemaining, isHost, nextQuestion, questionIndex, currentQuiz]);
-  
-  // Check if quiz addon becomes active/inactive
-  useEffect(() => {
-    if (!isQuizActive && quizStatus === 'active') {
-      // Quiz was stopped externally
-      setQuizStatus('ended');
+      setQuiz(quizData);
+      return quizData;
+    } catch (err: any) {
+      const errorMessage = err.response?.data?.error || 'An unknown error occurred';
+      setError(new Error(errorMessage));
+      return null;
+    } finally {
+      setIsLoading(false);
     }
-  }, [isQuizActive, quizStatus]);
-  
+  };
+
   return {
-    quizStatus,
-    currentQuiz,
-    currentQuestion,
-    questionIndex,
-    timeRemaining,
-    quizResults,
-    userAnswers,
-    isQuizActive,
+    getQuizQuestions,
+    isLoading,
+    error,
+    quiz,
+  };
+};
+
+
+interface QuestionStat {
+  id: string;
+  questionText: string;
+  totalResponses: number;
+  correctResponses: number;
+  correctPercentage: number;
+}
+
+interface LeaderboardEntry {
+  participantId: string;
+  userName: string;
+  walletAddress: string;
+  pointsEarned: number;
+  totalPoints: number;
+  correctAnswers: number;
+  totalAnswers: number;
+  accuracy: number;
+}
+
+interface QuizResultsResponse {
+  id: string;
+  title: string | null;
+  totalParticipants: number;
+  participantsAnswered: number;
+  questionStats: QuestionStat[];
+  leaderboard: LeaderboardEntry[];
+}
+
+interface UseGetQuizResultsReturn {
+  getQuizResults: (agendaId: string) => Promise<QuizResultsResponse | null>;
+  isLoading: boolean;
+  error: Error | null;
+  results: QuizResultsResponse | null;
+}
+
+/**
+ * Hook for fetching quiz results
+ * @returns Object containing getQuizResults function, loading state, error state, and results data
+ */
+export const useGetQuizResults = (): UseGetQuizResultsReturn => {
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [error, setError] = useState<Error | null>(null);
+  const [results, setResults] = useState<QuizResultsResponse | null>(null);
+  
+  // Get the API client from context
+  const { apiClient } = useTenantContext();
+
+  /**
+   * Get results for a quiz
+   * @param agendaId - ID of the quiz agenda
+   * @returns Quiz results or null if an error occurred
+   */
+  const getQuizResults = async (agendaId: string): Promise<QuizResultsResponse | null> => {
+    if (!agendaId) {
+      setError(new Error('Agenda ID is required'));
+      return null;
+    }
+
+    setIsLoading(true);
+    setError(null);
     
-    // Functions
-    initializeQuiz,
-    startQuiz,
-    endQuiz,
-    submitAnswer,
-    nextQuestion,
-    previousQuestion,
+    try {
+      // Use the API client to make the GET request to the /quiz/results/:agendaId endpoint
+      const quizResults = await apiClient.get<QuizResultsResponse>(`/quiz/results/${agendaId}`);
+      
+      setResults(quizResults);
+      return quizResults;
+    } catch (err: any) {
+      const errorMessage = err.response?.data?.error || 'An unknown error occurred';
+      setError(new Error(errorMessage));
+      return null;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return {
+    getQuizResults,
+    isLoading,
+    error,
+    results,
+  };
+};
+
+
+interface QuestionResponse {
+  questionId: string;
+  questionText: string;
+  answered: boolean;
+  answer: string | null;
+  isCorrect: boolean;
+  pointsEarned: number;
+  correctAnswer: string;
+}
+
+interface UserQuizAnswersResponse {
+  participantId: string;
+  userName: string;
+  walletAddress: string;
+  totalPoints: number;
+  answeredQuestions: number;
+  correctAnswers: number;
+  totalQuestions: number;
+  responses: QuestionResponse[];
+}
+
+interface UseGetUserQuizAnswersReturn {
+  getUserQuizAnswers: (agendaId: string, wallet: string) => Promise<UserQuizAnswersResponse | null>;
+  isLoading: boolean;
+  error: Error | null;
+  answers: UserQuizAnswersResponse | null;
+}
+
+/**
+ * Hook for fetching a user's answers to a quiz
+ * @returns Object containing getUserQuizAnswers function, loading state, error state, and user answers data
+ */
+export const useGetUserQuizAnswers = (): UseGetUserQuizAnswersReturn => {
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [error, setError] = useState<Error | null>(null);
+  const [answers, setAnswers] = useState<UserQuizAnswersResponse | null>(null);
+  
+  // Get the API client from context
+  const { apiClient } = useTenantContext();
+
+  /**
+   * Get a user's answers to a quiz
+   * @param agendaId - ID of the quiz agenda
+   * @param wallet - Wallet address of the user
+   * @returns User's quiz answers or null if an error occurred
+   */
+  const getUserQuizAnswers = async (
+    agendaId: string, 
+    wallet: string
+  ): Promise<UserQuizAnswersResponse | null> => {
+    if (!agendaId) {
+      setError(new Error('Agenda ID is required'));
+      return null;
+    }
     
-    // Set host status
-    setIsHost
+    if (!wallet) {
+      setError(new Error('Wallet address is required'));
+      return null;
+    }
+
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      // Use the API client to make the GET request to the /quiz/answers/:agendaId endpoint with wallet as query param
+      const userAnswers = await apiClient.get<UserQuizAnswersResponse>(
+        `/quiz/answers/${agendaId}?wallet=${wallet}`,
+      );
+      
+      setAnswers(userAnswers);
+      return userAnswers;
+    } catch (err: any) {
+      const errorMessage = err.response?.data?.error || 'An unknown error occurred';
+      setError(new Error(errorMessage));
+      return null;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return {
+    getUserQuizAnswers,
+    isLoading,
+    error,
+    answers,
   };
 };

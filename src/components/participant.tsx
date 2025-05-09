@@ -1,4 +1,6 @@
+import React from "react";
 import { LocalParticipant, RemoteParticipant } from "livekit-client";
+import ParticipantControls from "./participant-controls";
 
 export type ParticipantViewProps = {
   participant: LocalParticipant | RemoteParticipant;
@@ -7,6 +9,11 @@ export type ParticipantViewProps = {
   showUserInfo?: boolean;
   blurBackground?: boolean;
   avatarSize?: 'small' | 'medium' | 'large';
+  isLocal?: boolean;
+  isMicrophoneEnabled?: boolean;
+  isCameraEnabled?: boolean;
+  showControls?: boolean;
+  onGiftClick?: (participant: LocalParticipant | RemoteParticipant) => void;
   components?: {
     AvatarComponent?: React.FC<{
       participant: LocalParticipant | RemoteParticipant;
@@ -22,6 +29,12 @@ export type ParticipantViewProps = {
       participant: LocalParticipant | RemoteParticipant;
       avatarUrl: string;
     }>;
+    ControlsComponent?: React.FC<{
+      participant: LocalParticipant | RemoteParticipant;
+      isLocal: boolean;
+      isMicrophoneEnabled: boolean;
+      isCameraEnabled: boolean;
+    }>;
   };
 };
 
@@ -36,6 +49,11 @@ const ParticipantView: React.FC<ParticipantViewProps> = ({
   showUserInfo = true,
   blurBackground = true,
   avatarSize = 'medium',
+  isLocal = false,
+  isMicrophoneEnabled = false,
+  isCameraEnabled = false,
+  showControls = true,
+  onGiftClick,
   components,
 }) => {
   // Extract user data from participant metadata
@@ -120,6 +138,29 @@ const ParticipantView: React.FC<ParticipantViewProps> = ({
     );
   };
 
+  const renderControls = () => {
+    if (!showControls) return null;
+
+    if (components?.ControlsComponent) {
+      return <components.ControlsComponent 
+        participant={participant}
+        isLocal={isLocal}
+        isMicrophoneEnabled={isMicrophoneEnabled}
+        isCameraEnabled={isCameraEnabled}
+      />;
+    }
+
+    return (
+      <ParticipantControls
+        participant={participant}
+        isLocal={isLocal}
+        isMicrophoneEnabled={isMicrophoneEnabled}
+        isCameraEnabled={isCameraEnabled}
+        onGiftClick={onGiftClick}
+      />
+    );
+  };
+
   return (
     <div className={`relative w-full h-full overflow-hidden rounded-lg ${className}`} style={style}>
       {renderBackground()}
@@ -131,6 +172,9 @@ const ParticipantView: React.FC<ParticipantViewProps> = ({
 
       {/* User info */}
       {renderUserInfo()}
+
+      {/* Media controls */}
+      {renderControls()}
     </div>
   );
 };

@@ -40,19 +40,20 @@ export const MicrophoneControl: React.FC<MediaControlProps> = ({
   };
   
   return (
-    <div className={`bg-white flex flex-row items-center justify-between p-0.5 rounded-2xl gap-x-2 ${className}`} style={style}>
+    <div className={`bg-[var(--sdk-bg-primary-color)] flex flex-row items-center justify-between p-0.5 rounded-2xl gap-x-2 ${className}`} style={style}>
       <Icon name="circle" className="text-[#F5F5F5]" size={12} />
       <TrackToggle
         source={Track.Source.Microphone}
         showIcon={false}
         onChange={handleChange}
+        className="!p-0"
       >
         {isEnabled ? (
           <div className="bg-primary p-2 rounded-xl">
             {icon?.enabled || <Icon name="audio" className="text-white" />}
           </div>
         ) : (
-          <div className="bg-[#F5F5F5] p-2 rounded-xl">
+          <div className="bg-gray-500 bg-opacity-60 p-2 rounded-xl">
             {icon?.disabled || <Icon name="audioOff" className="text-white" />}
           </div>
         )}
@@ -181,10 +182,11 @@ export const CameraControl: React.FC<CameraControlProps> = ({
         onChange={(enabled) => {
           if (onChange) onChange(enabled);
         }}
+        className="!p-0"
       >
-        <div className="bg-white flex flex-row items-center justify-between p-0.5 rounded-2xl gap-x-2">
+        <div className="bg-[var(--sdk-bg-primary-color)] flex flex-row items-center justify-between p-0.5 rounded-2xl gap-x-2">
           <Icon name="circle" className="text-[#F5F5F5]" size={12} />
-          <div className={isCameraEnabled ? "bg-primary p-2 rounded-xl" : "bg-[#F5F5F5] p-2 rounded-xl"}>
+          <div className={isCameraEnabled ? "bg-primary p-2 rounded-xl" : "bg-gray-500 bg-opacity-60 p-2 rounded-xl"}>
             {isLoading ? icons.loading : (isCameraEnabled ? icons.cameraOn : icons.cameraOff)}
           </div>
         </div>
@@ -195,7 +197,7 @@ export const CameraControl: React.FC<CameraControlProps> = ({
         <button
           onClick={handleCameraSwitch}
           disabled={isLoading}
-          className="bg-white p-0.5 rounded-2xl cursor-pointer h-[44px] w-[44px] ml-2"
+          className="bg-[var(--sdk-bg-primary-color)] p-0.5 rounded-2xl cursor-pointer h-[44px] w-[44px] ml-2"
         >
           <div className="bg-[#DCCCF63D] rounded-2xl h-full flex flex-col items-center justify-center">
             {isLoading ? icons.loading : icons.switchCamera}
@@ -219,39 +221,48 @@ export const CameraControl: React.FC<CameraControlProps> = ({
  * ScreenShareControl component for toggling screen sharing
  * Modern UI style (formerly variant='modern')
  */
-export const ScreenShareControl: React.FC<MediaControlProps> = ({
-  className = "",
-  style,
-  showLabel = true,
-  labelText = "Screen",
-  onChange,
-  icon,
-}) => {
-  const [isEnabled, setIsEnabled] = useState(false);
+export const ScreenShareControl: React.FC<MediaControlProps> = (
+//   {
+//   className = "",
+//   style,
+//   showLabel = true,
+//   labelText = "Screen",
+//   onChange,
+//   icon,
+// }
+) => {
+  // const [isEnabled, setIsEnabled] = useState(false);
   
-  const handleChange = (enabled: boolean) => {
-    setIsEnabled(enabled);
-    if (onChange) {
-      onChange(enabled);
-    }
-  };
+  // const handleChange = (enabled: boolean) => {
+  //   setIsEnabled(enabled);
+  //   if (onChange) {
+  //     onChange(enabled);
+  //   }
+  // };
   
   return (
-    <div className={`bg-white p-0.5 rounded-2xl cursor-pointer h-[44px] w-[44px] ${className}`} style={style}>
-      <TrackToggle
-        source={Track.Source.ScreenShare}
-        showIcon={false}
-        onChange={handleChange}
-      >
-        <div className={`${isEnabled ? 'bg-gradient-to-t from-[#DCCCF6] to-primary' : 'bg-[#DCCCF63D]'} rounded-2xl h-full flex flex-col items-center justify-center`}>
-          {isEnabled ? 
-            (icon?.enabled || <Icon name="screen" className="text-white" />) : 
-            (icon?.disabled || <Icon name="screen" className="text-primary" />)
-          }
-        </div>
-      </TrackToggle>
-      {showLabel && <span className="text-xs text-center mt-1 block">{labelText}</span>}
+    // <div className={`bg-white p-0.5 rounded-2xl cursor-pointer h-[44px] w-[44px] ${className}`} style={style}>
+    //   <TrackToggle
+    //     source={Track.Source.ScreenShare}
+    //     showIcon={false}
+    //     onChange={handleChange}
+    //   >
+    //     <div className={`${isEnabled ? 'bg-gradient-to-t from-[#DCCCF6] to-primary' : 'bg-[#DCCCF63D]'} rounded-2xl h-full flex flex-col items-center justify-center`}>
+    //       {isEnabled ? 
+    //         (icon?.enabled || <Icon name="screen" className="text-white" />) : 
+    //         (icon?.disabled || <Icon name="screen" className="text-primary" />)
+    //       }
+    //     </div>
+    //   </TrackToggle>
+    //   {showLabel && <span className="text-xs text-center mt-1 block">{labelText}</span>}
+    // </div>
+    <TrackToggle source={Track.Source.ScreenShare} showIcon={false}>
+    <div className="bg-[var(--sdk-bg-primary-color)] p-0.5 rounded-2xl cursor-pointer h-[44px] w-[44px]">
+      <div className="bg-gradient-to-t from-[#DCCCF6] to-bg-primary rounded-2xl h-full flex flex-col items-center justify-center">
+        <Icon name="screen" className="text-primary" />
+      </div>
     </div>
+  </TrackToggle>
   );
 };
 

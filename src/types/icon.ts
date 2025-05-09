@@ -1,10 +1,10 @@
 export type IconPath = {
   viewBox: string;
   paths: string[];
-  fill?: string[]; 
+  fill?: string[];
   strokes?: string[];
   opacity?: number[];
-  type?: 'stroke' | 'fill' | 'hybrid';
+  type?: "stroke" | "fill" | "hybrid";
 };
 
 export type IconName =
@@ -40,6 +40,11 @@ export type IconName =
   | "signal"
   | "edit"
   | "moneyTransfer"
+  | "download-cloud"
+  | "search"
+  | "usdc"
+  | "sol"
+  | "send"
   | "link";
 
 export type IconPathsType = {

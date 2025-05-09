@@ -6,3 +6,4 @@ export * from "./audio-video-controls"
 export { default as BaseCallControls } from "./base-call-controls";
 export { default as UserView } from "./user-view";
 export { default as Prejoin } from "./prejoin";
+export { default as CallControls } from "./call-controls";
