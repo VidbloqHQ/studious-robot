@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
+import { useLocalParticipant } from "@livekit/components-react";
 import { useCallReactions } from "../hooks/useCallReactions";
 
 type ReactionProps = {
-  setShowReactions: (show: boolean) => void;
   showReactions: boolean;
-}
+};
 
 interface AnimatedReaction {
   id: string;
@@ -14,30 +14,47 @@ interface AnimatedReaction {
   opacity: number;
 }
 
-const Reactions: React.FC<ReactionProps> = ({ setShowReactions, showReactions }) => {
+const Reactions = ({ showReactions }: ReactionProps) => {
   const { reactions, sendReaction } = useCallReactions();
-  const [animatedReactions, setAnimatedReactions] = useState<AnimatedReaction[]>([]);
-  // const [showReactionPanel, setShowReactionPanel] = useState(true);
+  const p = useLocalParticipant();
+  const [animatedReactions, setAnimatedReactions] = useState<
+    AnimatedReaction[]
+  >([]);
+
   const containerRef = useRef<HTMLDivElement>(null);
-  
-  // Generate a random horizontal position within the container width
+  const sender = p.localParticipant.identity;
+  const processedReactionIds = useRef<Set<string>>(new Set());
+
   const getRandomPosition = (): number => {
     if (!containerRef.current) return Math.random() * 100;
-    return Math.random() * (containerRef.current.offsetWidth - 50);
+    const containerWidth = containerRef.current.offsetWidth;
+    return Math.random() * (containerWidth - 80);
   };
 
   // Handle incoming reactions and create animated versions
   useEffect(() => {
     if (reactions.length > 0) {
       const latestReaction = reactions[reactions.length - 1];
-      
+
+      // Create a unique ID for this reaction
+      const reactionId = `${
+        latestReaction.reaction
+      }-${Date.now()}-${Math.random()}`;
+
+      // Check if we've already processed this reaction to prevent duplicates
+      if (processedReactionIds.current.has(reactionId)) {
+        return;
+      }
+
+      processedReactionIds.current.add(reactionId);
+
       // Create an animated version of the reaction
       const animatedReaction: AnimatedReaction = {
-        id: `${latestReaction.reaction}-${Date.now()}-${Math.random()}`,
+        id: reactionId,
         reaction: latestReaction.reaction,
         sender: latestReaction.sender,
         position: getRandomPosition(),
-        opacity: 1
+        opacity: 1,
       };
 
       // Add to animated reactions
@@ -45,18 +62,21 @@ const Reactions: React.FC<ReactionProps> = ({ setShowReactions, showReactions })
 
       // Remove the animated reaction after animation completes
       setTimeout(() => {
-        setAnimatedReactions((prev) => 
+        setAnimatedReactions((prev) =>
           prev.filter((r) => r.id !== animatedReaction.id)
         );
-      }, 3000); // Match the duration of the CSS animation
+
+        // Keep the processed IDs set from growing too large by removing old entries
+        if (processedReactionIds.current.size > 100) {
+          processedReactionIds.current.delete(reactionId);
+        }
+      }, 4000); // Slightly longer than animation duration to ensure complete removal
     }
   }, [reactions]);
 
   // Handle sending a reaction
   const handleSendReaction = (emoji: string) => {
-    const sender = localStorage.getItem("userName") || "Anonymous";
     sendReaction(emoji, sender);
-    setShowReactions(false);
   };
 
   // Available reactions
@@ -64,26 +84,30 @@ const Reactions: React.FC<ReactionProps> = ({ setShowReactions, showReactions })
 
   return (
     <>
-      {/* Floating reactions container */}
-      <div 
+      {/* Floating reactions container - increased height for more animation space */}
+      <div
         ref={containerRef}
-        className={`absolute bottom-20 left-0 right-0 overflo h-[50vh] pointer-events-none`}
+        className="absolute bottom-0 left-0 right-0 overflow-hidden h-[80vh] pointer-events-none"
+        style={{ zIndex: 50 }} // Ensure reactions appear above other content
       >
         {animatedReactions.map((reaction) => (
           <div
             key={reaction.id}
-            className="absolute animate-float-up"
+            className="absolute"
             style={{
               left: `${reaction.position}px`,
-              fontSize: "2rem",
-              animation: "floatUp 3s ease-out forwards",
+              bottom: "80px", // Start above the controls
               opacity: reaction.opacity,
+              transform: "translateY(0)",
+              animation: "reaction-float 4s ease-out forwards", // Apply custom animation
             }}
           >
             <div className="flex flex-col items-center">
-              <span className="text-3xl">{reaction.reaction}</span>
+              <span className="text-3xl reaction-scale-bounce">
+                {reaction.reaction}
+              </span>
               <span className="text-xs text-white bg-black bg-opacity-50 px-2 py-1 rounded-full mt-1">
-                {reaction.sender}
+                {sender === reaction.sender ? " (You)" : reaction.sender}
               </span>
             </div>
           </div>

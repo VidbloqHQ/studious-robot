@@ -1,120 +1,31 @@
-import { Connection, PublicKey } from '@solana/web3.js';
-import { getAssociatedTokenAddress, createAssociatedTokenAccountInstruction, TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID } from '@solana/spl-token';
-
-/**
- * Get the Associated Token Account for a given wallet and mint
- * If the ATA doesn't exist, returns instructions to create it
- */
-export const getOrCreateAssociatedTokenAccount = async (
-  connection: Connection,
-  payer: PublicKey,
-  mint: PublicKey,
-  owner: PublicKey,
-  allowOwnerOffCurve = false,
-) => {
-  try {
-    // Get the associated token account address
-    const ata = await getAssociatedTokenAddress(
-      mint,
-      owner,
-      allowOwnerOffCurve,
-      TOKEN_PROGRAM_ID,
-      ASSOCIATED_TOKEN_PROGRAM_ID
-    );
-
-    // Check if the account exists
-    const accountInfo = await connection.getAccountInfo(ata);
-    
-    if (!accountInfo) {
-      // If not, return instructions to create it
-      return {
-        address: ata,
-        instructions: [
-          createAssociatedTokenAccountInstruction(
-            payer,
-            ata,
-            owner,
-            mint,
-            TOKEN_PROGRAM_ID,
-            ASSOCIATED_TOKEN_PROGRAM_ID
-          )
-        ],
-        exists: false,
-      };
+export const getTokenBalance = async (pubkey: string) => {
+  const heliusApiKey = "10b8f1fb-6b38-43cb-a769-e6965206020e";
+  const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+  const heliusResponse = await fetch(
+    `https://api.helius.xyz/v0/addresses/${pubkey}/balances?api-key=${heliusApiKey}`,
+    {
+      headers: { "x-api-key": heliusApiKey },
+      signal: AbortSignal.timeout(5000), // modern equivalent of timeout option
     }
+  );
 
-    // The account exists, no need for instructions
-    return {
-      address: ata,
-      instructions: [],
-      exists: true,
-    };
-  } catch (error) {
-    console.error('Error getting or creating associated token account:', error);
-    throw error;
+  if (!heliusResponse.ok) {
+    throw new Error(`Helius API error: ${heliusResponse.status}`);
   }
-};
 
-/**
- * Get SPL token balance for a given token account
- */
-export const getTokenBalance = async (
-  connection: Connection,
-  tokenAccount: PublicKey,
-) => {
-  try {
-    const accountInfo = await connection.getTokenAccountBalance(tokenAccount);
-    return accountInfo.value.uiAmount || 0;
-  } catch (error) {
-    console.error('Error getting token balance:', error);
-    throw error;
-  }
-};
+  const heliusData = await heliusResponse.json();
 
-/**
- * Get all token accounts owned by a wallet for a specific mint
- */
-export const getTokenAccountsByOwner = async (
-  connection: Connection,
-  ownerAddress: PublicKey,
-  mintAddress?: PublicKey,
-) => {
-  try {
-    // Create query options - if mintAddress is provided, we'll filter by mint
-    const queryOptions = mintAddress 
-      ? { mint: mintAddress }
-      : { programId: TOKEN_PROGRAM_ID };
+  const findTokenBalance = (mint: string, decimals: number = 6) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const token = heliusData?.tokens?.find((t: any) => t.mint === mint);
+        console.log(decimals)
+    return token ? token.amount / Math.pow(10, token.decimals) : 0;
+  };
 
-    const accounts = await connection.getParsedTokenAccountsByOwner(
-      ownerAddress,
-      queryOptions
-    );
+  const onChainBalance = {
+    usdc: findTokenBalance(USDC_MINT, 6),
+    // usdStar: findTokenBalance(USD_STAR_MINT, 6),
+  };
 
-    return accounts.value.map((account) => ({
-      pubkey: account.pubkey,
-      account: account.account,
-      info: account.account.data.parsed.info,
-    }));
-  } catch (error) {
-    console.error('Error getting token accounts by owner:', error);
-    throw error;
-  }
-};
-
-/**
- * Convert a token amount from the smallest unit to a human-readable format
- * based on the number of decimals in the mint
- */
-export const formatTokenAmount = (amount: number | string, decimals: number) => {
-  const amountNum = typeof amount === 'string' ? parseFloat(amount) : amount;
-  return amountNum / Math.pow(10, decimals);
-};
-
-/**
- * Convert a human-readable token amount to the smallest unit
- * based on the number of decimals in the mint
- */
-export const toTokenAmount = (amount: number | string, decimals: number) => {
-  const amountNum = typeof amount === 'string' ? parseFloat(amount) : amount;
-  return Math.floor(amountNum * Math.pow(10, decimals));
+  return { onChainBalance };
 };

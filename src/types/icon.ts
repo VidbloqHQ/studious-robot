@@ -45,6 +45,10 @@ export type IconName =
   | "usdc"
   | "sol"
   | "send"
+  | "cameraSwitch"
+  | "loading"
+  | "list"
+  | "grid"
   | "link";
 
 export type IconPathsType = {

@@ -8,7 +8,7 @@ export * from "./useHandleStreamDisconnect";
 export * from "./useParticipant";
 export * from "./useClickOutside";
 export * from "./useTransaction"
-export * from "./useVidbloqProgram"
+// export * from "./useVidbloqProgram"
 export * from "./useWebSocket"
 export * from "./useTenantContext"
 export * from "./usePrejoin"

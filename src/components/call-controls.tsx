@@ -61,15 +61,14 @@ const CallControls: React.FC<CallControlsProps> = ({
   const [showParticipantList, setShowParticipantList] =
     useState<boolean>(false);
   const [showMobileMenu, setShowMobileMenu] = useState<boolean>(false);
-   const [showReactions, setShowReactions] = useState<boolean>(false);
-  // const [showReactionPanel, setShowReactionPanel] = useState(true);
+  const [showReactions, setShowReactions] = useState<boolean>(false);
 
- const handleReactionsToggle = () => {
-      setShowReactions(!showReactions);
-      if (onReactionsToggle) {
-        onReactionsToggle();
-      }
-    };
+  const handleReactionsToggle = () => {
+    setShowReactions(!showReactions);
+    if (onReactionsToggle) {
+      onReactionsToggle();
+    }
+  };
 
   const renderCallControls = (props: CallControlsRenderProps) => {
     const {
@@ -128,14 +127,14 @@ const CallControls: React.FC<CallControlsProps> = ({
               </div>
               <div
                 className="bg-[var(--sdk-bg-primary-color)] p-0.5 rounded-2xl cursor-pointer h-[50px] w-[50px]"
-                onClick={onReactionsToggle}
+                // onClick={onReactionsToggle}
               >
                 {components?.ReactionsButton ? (
                   <components.ReactionsButton
                     onClick={onReactionsToggle || (() => {})}
                   />
                 ) : (
-                  <div className="bg-[#DCCCF63D] rounded-2xl h-full flex flex-col items-center justify-center">
+                  <div className="bg-[#DCCCF63D] rounded-2xl h-full flex flex-col items-center justify-center" onClick={handleReactionsToggle}>
                     <Icon name="smiley" className="text-yellow-400" />
                   </div>
                 )}
@@ -167,8 +166,7 @@ const CallControls: React.FC<CallControlsProps> = ({
           onClose={() => setShowChat(false)}
           participants={participants}
         />
- {/* <Reactions className={showReactions ? "z-20" : ""} /> */}
-  <Reactions  setShowReactions={setShowReactions} showReactions={showReactions}/>
+        <Reactions showReactions={showReactions} />
         <div className={`w-full max-6xl mx-auto ${className}`} style={style}>
           <div className="flex items-center justify-between">
             {/* Left group - Link and Menu icons */}
@@ -184,7 +182,7 @@ const CallControls: React.FC<CallControlsProps> = ({
                 </div>
               </div>
               <div
-                className="bg-[var(--sdk-bg-primary-color)] hidden lg:flex flex-row items-center justify-between p-0.5 rounded-2xl gap-x-2"
+                className="bg-[var(--sdk-bg-primary-color)] hidden flex-row items-center justify-between p-0.5 rounded-2xl gap-x-2"
                 onClick={onAgendaToggle}
               >
                 <Icon name="circle" className="text-[#F5F5F5]" size={12} />
@@ -299,34 +297,38 @@ const CallControls: React.FC<CallControlsProps> = ({
                 ))}
 
               {/* Reactions */}
-                            <div
-                className="bg-[var(--sdk-bg-primary-color)] border flex flex-row lg:hidden items-center justify-between p-0.5 rounded-2xl gap-x-2 cursor-pointer"
-                onClick={() => setShowMobileMenu(true)}
-              >
-                <Icon name="circle" className="text-[#F5F5F5]" size={12} />
-                <div className="bg-[#DCCCF63D] p-2 rounded-xl">
-                  <Icon name="more" className="text-primary" />
-                </div>
-              </div>
               <div
-                className="bg-[var(--sdk-bg-primary-color)] hidden lg:block p-0.5 rounded-2xl cursor-pointer h-[44px] w-[44px]"
-                // onClick={handleReactionsToggle}
+                className={`p-0.5 rounded-2xl cursor-pointer h-[44px] w-[44px] ${
+                  showReactions
+                    ? "bg-primary"
+                    : "bg-[var(--sdk-bg-primary-color)]"
+                } `}
               >
                 {components?.ReactionsButton ? (
                   <components.ReactionsButton
                     onClick={onReactionsToggle || (() => {})}
                   />
                 ) : (
-                  <div className="bg-[#DCCCF63D] rounded-2xl h-full flex flex-col items-center justify-center" 
-                  // onClick={handleReactionsToggle}
-                  
-                  onClick={handleReactionsToggle}
+                  <div
+                    className={` rounded-2xl h-full flex flex-col items-center justify-center
+                      ${showReactions ? "bg-primary" : "bg-[#DCCCF63D]"}
+                      `}
+                    onClick={handleReactionsToggle}
                   >
                     <Icon name="smiley" className="text-yellow-400" />
                   </div>
                 )}
               </div>
 
+              <div
+                className="bg-[var(--sdk-bg-primary-color)] border flex flex-row lg:hidden items-center justify-between p-0.5 rounded-2xl gap-x-2 cursor-pointer"
+                onClick={() => setShowMobileMenu(true)}
+              >
+                <Icon name="circle" className="text-[#F5F5F5] hidden" size={12} />
+                <div className="bg-[#DCCCF63D] p-2 rounded-xl">
+                  <Icon name="more" className="text-primary" />
+                </div>
+              </div>
               {/* Chat */}
               <div
                 className="bg-[var(--sdk-bg-primary-color)] hidden lg:block p-0.5 rounded-2xl cursor-pointer h-[44px] w-[44px]"
@@ -352,7 +354,7 @@ const CallControls: React.FC<CallControlsProps> = ({
                 <components.EndCallButton onClick={handleDisconnectClick} />
               ) : (
                 <>
-                  <span className="ml-2">End</span>
+                  <span className="ml-2 hidden lg:block">End</span>
                   <div className="rounded-2xl bg-[#FF5555] p-2">
                     <Icon name="phone" className="text-white" />
                   </div>

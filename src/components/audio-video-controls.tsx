@@ -41,7 +41,7 @@ export const MicrophoneControl: React.FC<MediaControlProps> = ({
   
   return (
     <div className={`bg-[var(--sdk-bg-primary-color)] flex flex-row items-center justify-between p-0.5 rounded-2xl gap-x-2 ${className}`} style={style}>
-      <Icon name="circle" className="text-[#F5F5F5]" size={12} />
+      <Icon name="circle" className="text-[#F5F5F5] hidden lg:block" size={12} />
       <TrackToggle
         source={Track.Source.Microphone}
         showIcon={false}
@@ -160,8 +160,8 @@ export const CameraControl: React.FC<CameraControlProps> = ({
   const defaultIcons = {
     cameraOn: <Icon name="video" className="text-white" />,
     cameraOff: <Icon name="videoOff" className="text-white" />,
-    switchCamera: <Icon name="Poll" className="text-primary" size={16} />,
-    loading: <Icon name="usdt" className="text-primary animate-spin" size={16} />
+    switchCamera: <Icon name="cameraSwitch" className="text-primary" size={16} />,
+    loading: <Icon name="loading" className="text-primary animate-spin" size={16} />
   };
   
   // Use custom icons if provided, otherwise use defaults
@@ -185,7 +185,7 @@ export const CameraControl: React.FC<CameraControlProps> = ({
         className="!p-0"
       >
         <div className="bg-[var(--sdk-bg-primary-color)] flex flex-row items-center justify-between p-0.5 rounded-2xl gap-x-2">
-          <Icon name="circle" className="text-[#F5F5F5]" size={12} />
+          <Icon name="circle" className="text-[#F5F5F5] hidden lg:block" size={12} />
           <div className={isCameraEnabled ? "bg-primary p-2 rounded-xl" : "bg-gray-500 bg-opacity-60 p-2 rounded-xl"}>
             {isLoading ? icons.loading : (isCameraEnabled ? icons.cameraOn : icons.cameraOff)}
           </div>

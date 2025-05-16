@@ -139,7 +139,7 @@ const ParticipantControls: React.FC<ParticipantControlsProps> = ({
     }
   };
 
-  const shouldShowGift = showGift;
+   const shouldShowGift = showGift && !isLocal;
 
   // Handle closing the send modal
   const handleCloseSendModal = (closed: boolean) => {
@@ -150,39 +150,8 @@ const ParticipantControls: React.FC<ParticipantControlsProps> = ({
   return (
     <>
       <div
-        className={`absolute top-2 left-2 flex items-center space-x-2 z-10 ${className}`}
+        className={`absolute top-2 left-2 flex items-center justify-between inset-x-2 z-10 ${className}`}
       >
-        {/* Audio status icon */}
-        {showAudio && (
-          <div
-            className={`w-8 h-8 rounded-full flex items-center justify-center ${
-              localMicEnabled ? "bg-primary" : "bg-gray-500 bg-opacity-60"
-            }`}
-          >
-            <Icon
-              name={localMicEnabled ? "audio" : "audioOff"}
-              className="text-white"
-              size={16}
-            />
-          </div>
-        )}
-
-        {/* Video status icon */}
-        {showVideo && (
-          <div
-            className={`w-8 h-8 rounded-full flex items-center justify-center ${
-              localCameraEnabled ? "bg-primary" : "bg-gray-500 bg-opacity-60"
-            }`}
-          >
-            <Icon
-              name={localCameraEnabled ? "video" : "videoOff"}
-              className="text-white"
-              size={16}
-            />
-          </div>
-        )}
-
-        {/* Gift button - only shown for regular participants, not hosts */}
         {shouldShowGift && (
           <div
             className="w-8 h-8 rounded-full bg-primary flex items-center justify-center cursor-pointer hover:bg-primary-light"
@@ -191,7 +160,39 @@ const ParticipantControls: React.FC<ParticipantControlsProps> = ({
             <Icon name="moneyTransfer" className="text-white" size={16} />
           </div>
         )}
+        <div className="flex flex-row items-center gap-x-2">
+          {/* Audio status icon */}
+          {showAudio && (
+            <div
+              className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                localMicEnabled ? "bg-primary" : "bg-gray-500 bg-opacity-60"
+              }`}
+            >
+              <Icon
+                name={localMicEnabled ? "audio" : "audioOff"}
+                className="text-white"
+                size={16}
+              />
+            </div>
+          )}
+
+          {/* Video status icon */}
+          {showVideo && (
+            <div
+              className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                localCameraEnabled ? "bg-primary" : "bg-gray-500 bg-opacity-60"
+              }`}
+            >
+              <Icon
+                name={localCameraEnabled ? "video" : "videoOff"}
+                className="text-white"
+                size={16}
+              />
+            </div>
+          )}
+        </div>
       </div>
+      {/* </div> */}
 
       {/* Render SendModal when showSendModal is true and selectedParticipant exists */}
       {showSendModal && selectedParticipant && (

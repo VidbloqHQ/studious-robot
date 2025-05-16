@@ -7,7 +7,7 @@ type ShareModalProps = {
   onClose: () => void;
 };
 
-const ShareModal = ({onClose, isOpen}: ShareModalProps) => {
+const ShareModal = ({ onClose, isOpen }: ShareModalProps) => {
   const { addNotification } = useNotification();
   const { roomName } = useStreamContext();
   const copyText = async (text: string) => {
@@ -27,7 +27,7 @@ const ShareModal = ({onClose, isOpen}: ShareModalProps) => {
       });
     }
   };
-    if (!isOpen) return null;
+  if (!isOpen) return null;
   return (
     <div className="relative">
       <Modal
@@ -55,18 +55,19 @@ const ShareModal = ({onClose, isOpen}: ShareModalProps) => {
             Share meeting link with others you want here.
           </p>
           <div className="border border-primary flex flex-row items-center rounded-xl p-0.5 justify-between">
-            <div className="flex flex-row items-center gap-x-1">
-              <div className="bg-[#DCCCF63D] p-1 rounded-l-xl">
+            <div className="flex flex-row items-center gap-x-1 flex-1 min-w-0">
+              <div className="bg-[#DCCCF63D] p-1 rounded-l-xl flex-shrink-0">
                 <Icon name="link" className="text-primary" size={18} />
               </div>
-              <p className="text-sm truncate">{`${window.location.hostname}/${roomName}`}</p>
+              <p className="text-sm truncate min-w-0 flex-1">
+                {`${window.location.hostname}/${roomName}`}
+              </p>
             </div>
-
             <div
               onClick={() =>
                 copyText(`${window.location.hostname}/${roomName}`)
               }
-              className="cursor-pointer p-1.5 rounded-lg bg-primary"
+              className="cursor-pointer p-1.5 rounded-lg bg-primary flex-shrink-0 ml-1"
             >
               <Icon name="copy" size={14} className="text-text-primary" />
             </div>

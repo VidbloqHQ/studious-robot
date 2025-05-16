@@ -4,9 +4,10 @@ import {
   ParticipantContext,
   useLocalParticipant,
 } from "@livekit/components-react";
-import Meeting from "./meeting";
+// import Meeting from "./meeting";
+import Meeting from "./meeting-classic";
 import Livestream from "./livestream";
-import Prejoin from "./prejoin";
+// import Prejoin from "./prejoin";
 import CallControls from "./call-controls";
 import RequestCard from "./request-card";
 import { GuestRequest } from "../types";
@@ -17,7 +18,7 @@ const UserView = () => {
   const p = useLocalParticipant();
   const {
     streamMetadata,
-    token,
+    // token,
     guestRequests,
     userType,
     websocket,
@@ -130,9 +131,9 @@ const UserView = () => {
     };
   }, [websocket, roomName]);
 
-  if (!token) {
-    return <Prejoin />;
-  }
+  // if (!token) {
+  //   return <Prejoin />;
+  // }
 
   return (
     <>

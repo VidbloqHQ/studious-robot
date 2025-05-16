@@ -1,3 +1,9 @@
+import { Buffer } from 'buffer';
+
+// Make Buffer available globally for browser environments
+if (typeof window !== 'undefined') {
+  window.Buffer = window.Buffer || Buffer;
+}
 import "./index.css";
 import {
   StreamRoom,
@@ -13,11 +19,14 @@ import {
   RecordControl,
   MediaControls,
   StreamView,
+  // StreamManager
 } from "./components/index";
+// export * from "./components";
+
 
 import {
   useTransaction,
-  useVidbloqProgram,
+  // useVidbloqProgram,
   useParticipantList,
   useStreamContext,
   useWalletContext,
@@ -45,7 +54,7 @@ export {
   CallControls,
   StreamView,
   useTransaction,
-  useVidbloqProgram,
+  // useVidbloqProgram,
   useParticipantList,
   useStreamContext,
   useWalletContext,
@@ -56,4 +65,5 @@ export {
   useWebSocket,
   useLivestream,
   useMeeting,
+  // StreamManager
 };
