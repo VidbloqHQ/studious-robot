@@ -1,4 +1,4 @@
-import { StreamProvider } from "../context";
+import { StreamProvider, VidbloqProgramProvider } from "../context";
 
 type StreamRoomProps = {
   roomName: string;
@@ -8,9 +8,7 @@ type StreamRoomProps = {
 const StreamRoom = ({ roomName, children }: StreamRoomProps) => {
   return (
     <StreamProvider roomName={roomName}>
-      {/* <VidbloqProgramProvider>  VidbloqProgramProvider */}
-        {children}
-        {/* </VidbloqProgramProvider> */}
+      <VidbloqProgramProvider>{children}</VidbloqProgramProvider>
     </StreamProvider>
   );
 };
