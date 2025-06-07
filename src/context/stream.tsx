@@ -31,7 +31,7 @@ type StreamContextType = {
   showTransactionModal: boolean;
   setShowTransactionModal: (show: boolean) => void;
   token: string | undefined;
-  generateToken: (val: string) => Promise<void>;
+  generateToken: (val: string, avatarUrl?: string) => Promise<void>;
   setToken: (token: string | undefined) => void;
   agendas: Agenda[];
   setAgendas: (agendas: Agenda[]) => void;
@@ -291,7 +291,7 @@ export const StreamProvider = ({
 
   // Token generation function
   const generateToken = useCallback(
-    async (username: string) => {
+    async (username: string, avatarUrl?: string) => {
       if (!publicKey) {
         addNotification({
           type: "error",
@@ -306,6 +306,7 @@ export const StreamProvider = ({
         roomName,
         userName: username,
         wallet: walletAddress,
+        avatarUrl
       };
 
       try {

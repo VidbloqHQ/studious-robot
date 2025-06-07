@@ -199,5 +199,3 @@ export const useCustomChat = (options: ChatOptions): CustomChatHook => {
     isReady,
   };
 };
-
-export default useCustomChat;

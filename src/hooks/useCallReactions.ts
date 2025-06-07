@@ -6,15 +6,10 @@ interface ReactionData {
   sender: string;
 }
 
-interface UseCallReactionsProps {
-  roomName?: string;
-}
 
-export const useCallReactions = (props?: UseCallReactionsProps) => {
-  const { websocket, roomName: contextRoomName } = useStreamContext();
-  const roomName = props?.roomName || contextRoomName;
-  
+export const useCallReactions = () => {
   const [reactions, setReactions] = useState<ReactionData[]>([]);
+    const { websocket, roomName } = useStreamContext();
 
   // Set up WebSocket event listeners for reactions
   useEffect(() => {

@@ -25,6 +25,8 @@ interface UsePrejoinOptions {
    * Optional public key from wallet connection
    */
   publicKey?: { toString: () => string; toBase58: () => string } | null;
+
+  avatarUrl?: string;
 }
 
 interface UsePrejoinReturn {
@@ -86,7 +88,7 @@ interface UsePrejoinReturn {
  * @returns Object containing pre-join state and functions
  */
 export const usePrejoin = (options: UsePrejoinOptions = {}): UsePrejoinReturn => {
-  const { initialNickname = '', publicKey } = options;
+  const { initialNickname = '', publicKey, avatarUrl } = options;
   
   // State
   const [nickname, setNickname] = useState<string>(initialNickname);
@@ -198,7 +200,7 @@ export const usePrejoin = (options: UsePrejoinOptions = {}): UsePrejoinReturn =>
     
     setIsLoading(true);
     try {
-      await generateToken(nickname);
+      await generateToken(nickname, avatarUrl);
     } catch (e) {
       console.error('Error joining stream:', e);
       const error = e instanceof Error ? e : new Error('Failed to join stream');
@@ -206,7 +208,7 @@ export const usePrejoin = (options: UsePrejoinOptions = {}): UsePrejoinReturn =>
     } finally {
       setIsLoading(false);
     }
-  }, [nickname, publicKey, generateToken, addNotification]);
+  }, [nickname, publicKey, generateToken, addNotification, avatarUrl]);
 
   // Determine if user can control media based on roles
   const determineInitialPermissions = useCallback(() => {

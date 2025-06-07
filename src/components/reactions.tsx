@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useLocalParticipant } from "@livekit/components-react";
-import { useCallReactions } from "../hooks/useCallReactions";
+import { useCallReactions } from "../hooks/index";
 
 type ReactionProps = {
   showReactions: boolean;
