@@ -204,3 +204,37 @@ export type ParticipantMetadata = {
 export type ParticipantTrack = TrackReference & {
   participant?: LocalParticipant | RemoteParticipant;
 };
+
+// Add to your existing types/index.ts
+
+export interface RaisedHand {
+  participantId: string;
+  name: string;
+  walletAddress: string;
+  timestamp: number;
+  userType: "host" | "co-host";
+}
+
+// WebSocket message types for raise hand feature
+export interface RaiseHandMessage {
+  event: "raiseHand";
+  data: {
+    roomName: string;
+    participantId: string;
+    name: string;
+    walletAddress: string;
+  };
+}
+
+export interface LowerHandMessage {
+  event: "lowerHand";
+  data: {
+    roomName: string;
+    participantId: string;
+  };
+}
+
+export interface RaisedHandsUpdateMessage {
+  event: "raisedHandsUpdate";
+  data: RaisedHand[];
+}

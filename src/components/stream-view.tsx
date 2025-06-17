@@ -1,6 +1,6 @@
 import { LiveKitRoom, RoomAudioRenderer } from "@livekit/components-react";
 import { useStreamContext } from "../hooks";
-import UserView from "./user-view";
+import StreamContainer from "./stream-container";
 
 type StreamViewProps = {
   children?: React.ReactNode;
@@ -25,11 +25,9 @@ const StreamView = ({ children }: StreamViewProps) => {
         serverUrl="wss://streamlink-vtdavgse.livekit.cloud"
         className="relative h-screen overflow-x-hidden w-screen flex flex-col"
       >
-        {children ?? <UserView />}
-
+        <StreamContainer>{children}</StreamContainer>
         <RoomAudioRenderer />
       </LiveKitRoom>
-      
     </>
   );
 };

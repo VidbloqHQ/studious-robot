@@ -16,10 +16,6 @@ interface PreviewTrackState {
 }
 
 interface UsePrejoinOptions {
-  /**
-   * Optional initial nickname value
-   */
-  initialNickname?: string;
   
   /**
    * Optional public key from wallet connection
@@ -88,10 +84,8 @@ interface UsePrejoinReturn {
  * @returns Object containing pre-join state and functions
  */
 export const usePrejoin = (options: UsePrejoinOptions = {}): UsePrejoinReturn => {
-  const { initialNickname = '', publicKey, avatarUrl } = options;
+  const { publicKey, avatarUrl } = options;
   
-  // State
-  const [nickname, setNickname] = useState<string>(initialNickname);
   const [previewTracks, setPreviewTracks] = useState<PreviewTrackState>({});
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<Error | null>(null);
@@ -105,6 +99,8 @@ export const usePrejoin = (options: UsePrejoinOptions = {}): UsePrejoinReturn =>
     streamMetadata, 
     setAudioEnabled, 
     setVideoEnabled,
+    nickname,
+    setNickname,
     generateToken 
   } = useStreamContext();
   const { addNotification } = useNotification();

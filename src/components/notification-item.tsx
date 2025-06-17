@@ -10,7 +10,7 @@ const NotificationItem = ({ notification, onClose }: NotificationItemProps) => {
   const bgColor = {
     success: "bg-green-100 border-green-500",
     error: "bg-red-100 border-red-500",
-    info: "bg-blue-100 border-blue-500",
+    info: "bg-[var(--sdk-bg-primary-color)] border-primary",
     warning: "bg-yellow-100 border-yellow-500",
     custom: "bg-gray-100 border-gray-500",
   }[notification.type];

@@ -9,7 +9,7 @@ interface WebSocketHookOptions {
   onError?: (event: Event) => void;
 }
 
-interface WebSocketMessage<T = unknown> {
+export interface WebSocketMessage<T = unknown> {
   event: string;
   data: T;
 }
@@ -80,35 +80,35 @@ export const useWebSocket = ({
    */
   const connect = useCallback(() => {
     if (isUnmounting.current) {
-      console.log('Not connecting - component is unmounting');
+      // console.log('Not connecting - component is unmounting');
       return;
     }
     
     if (ws.current?.readyState === WebSocket.OPEN) {
-      console.log('WebSocket already connected');
+      // console.log('WebSocket already connected');
       return;
     }
     
     if (connectionAttemptInProgress.current) {
-      console.log('Connection attempt already in progress');
+      // console.log('Connection attempt already in progress');
       return;
     }
 
     if (reconnectCount.current >= reconnectAttempts) {
-      console.log(`Max reconnection attempts (${reconnectAttempts}) reached`);
+      // console.log(`Max reconnection attempts (${reconnectAttempts}) reached`);
       return;
     }
 
     connectionAttemptInProgress.current = true;
-    console.log(`Connecting to WebSocket at: ${url}`);
-    console.log(`Attempting to connect to WebSocket (attempt ${reconnectCount.current + 1}/${reconnectAttempts})...`);
+    // console.log(`Connecting to WebSocket at: ${url}`);
+    // console.log(`Attempting to connect to WebSocket (attempt ${reconnectCount.current + 1}/${reconnectAttempts})...`);
 
     // Create new WebSocket connection
     ws.current = new WebSocket(url);
 
     // Setup event handlers
     ws.current.onopen = (event) => {
-      console.log('WebSocket connection established');
+      // console.log('WebSocket connection established');
       setIsConnected(true);
       reconnectCount.current = 0;
       lastConnectedTime.current = Date.now();
@@ -124,7 +124,7 @@ export const useWebSocket = ({
     };
 
     ws.current.onclose = (event) => {
-      console.log('WebSocket connection closed');
+      // console.log('WebSocket connection closed');
       setIsConnected(false);
       connectionAttemptInProgress.current = false;
       
@@ -141,7 +141,7 @@ export const useWebSocket = ({
         
       if (shouldReconnect) {
         reconnectCount.current++;
-        console.log(`Attempting to reconnect (${reconnectCount.current}/${reconnectAttempts})...`);
+        // console.log(`Attempting to reconnect (${reconnectCount.current}/${reconnectAttempts})...`);
         setTimeout(connect, reconnectInterval);
       }
     };
@@ -232,19 +232,19 @@ export const useWebSocket = ({
     // Only disconnect if connection has been established for a longer time
     // Increase from 30 seconds to 60 seconds to reduce unnecessary disconnections
     if (ws.current && Date.now() - lastConnectedTime.current > 60000) {
-      console.log('Disconnecting WebSocket...');
+      // console.log('Disconnecting WebSocket...');
       ws.current.close();
       ws.current = null;
       setIsConnected(false);
     } else {
-      console.log('Skipping disconnect - connection too recent');
+      // console.log('Skipping disconnect - connection too recent');
     }
   }, []);
 
   // Initialize connection with delay
   useEffect(() => {
     // Add debugging for mounting/unmounting
-    console.log("WebSocket hook mounted");
+    // console.log("WebSocket hook mounted");
     isUnmounting.current = false;
     
     const timer = setTimeout(() => {
@@ -253,18 +253,18 @@ export const useWebSocket = ({
       
     // Clean up the WebSocket connection when the component unmounts
     return () => {
-      console.log("WebSocket hook unmounted");
+      // console.log("WebSocket hook unmounted");
       isUnmounting.current = true;
       clearTimeout(timer);
       
       // Significantly reduce disconnects during development cycles
       // Only disconnect if connection has been established for a long time
       if (ws.current && Date.now() - lastConnectedTime.current > 30000) {
-        console.log('Disconnecting WebSocket on unmount...');
+        // console.log('Disconnecting WebSocket on unmount...');
         ws.current.close();
         ws.current = null;
       } else {
-        console.log('Skipping disconnect on unmount - connection too recent');
+        // console.log('Skipping disconnect on unmount - connection too recent');
       }
     };
   }, [connect]);
@@ -281,7 +281,7 @@ export const useWebSocket = ({
     // Type assertion needed since we're storing listeners for various event types
     listenersByEvent.current[event].add(listener as EventListener);
     
-    console.log(`Added listener for event '${event}', total listeners: ${listenersByEvent.current[event].size}`);
+    // console.log(`Added listener for event '${event}', total listeners: ${listenersByEvent.current[event].size}`);
   }, []);
 
   /**
@@ -294,7 +294,7 @@ export const useWebSocket = ({
     if (listeners) {
       // Type assertion needed since we're storing listeners for various event types
       listeners.delete(listener as EventListener);
-      console.log(`Removed listener for event '${event}', remaining listeners: ${listeners.size}`);
+      // console.log(`Removed listener for event '${event}', remaining listeners: ${listeners.size}`);
       
       if (listeners.size === 0) {
         delete listenersByEvent.current[event];
@@ -308,7 +308,7 @@ export const useWebSocket = ({
    * @param participantId Participant ID
    */
   const joinRoom = useCallback((roomName: string, participantId: string) => {
-    console.log(`Joining room ${roomName} with identity ${participantId}`);
+    // console.log(`Joining room ${roomName} with identity ${participantId}`);
     return sendMessage('joinRoom', { roomName, participantId });
   }, [sendMessage]);
 
@@ -325,12 +325,66 @@ export const useWebSocket = ({
     name: string, 
     walletAddress: string
   ) => {
-    console.log(`Requesting to speak in room ${roomName} with identity ${participantId}`);
+    // console.log(`Requesting to speak in room ${roomName} with identity ${participantId}`);
     return sendMessage('requestToSpeak', {
       roomName,
       participantId,
       name,
       walletAddress
+    });
+  }, [sendMessage]);
+
+  /**
+   * Raise hand in a meeting
+   * @param roomName Room name
+   * @param participantId Participant ID
+   * @param name Participant display name
+   * @param walletAddress Participant wallet address
+   */
+  const raiseHand = useCallback((
+    roomName: string, 
+    participantId: string, 
+    name: string, 
+    walletAddress: string
+  ) => {
+    // console.log(`Raising hand in room ${roomName} for participant ${participantId}`);
+    return sendMessage('raiseHand', {
+      roomName,
+      participantId,
+      name,
+      walletAddress
+    });
+  }, [sendMessage]);
+
+  /**
+   * Lower hand in a meeting
+   * @param roomName Room name
+   * @param participantId Participant ID
+   */
+  const lowerHand = useCallback((
+    roomName: string, 
+    participantId: string
+  ) => {
+    // console.log(`Lowering hand in room ${roomName} for participant ${participantId}`);
+    return sendMessage('lowerHand', {
+      roomName,
+      participantId
+    });
+  }, [sendMessage]);
+
+  /**
+   * Acknowledge a raised hand (for hosts)
+   * @param roomName Room name
+   * @param participantId Participant ID to acknowledge
+   */
+  const acknowledgeHand = useCallback((
+    roomName: string, 
+    participantId: string
+  ) => {
+    // console.log(`Acknowledging raised hand for ${participantId} in room ${roomName}`);
+    return sendMessage('acknowledgeHand', {
+      roomName,
+      participantId
     });
   }, [sendMessage]);
 
@@ -399,6 +453,9 @@ export const useWebSocket = ({
     removeEventListener,
     joinRoom,
     requestToSpeak,
+    raiseHand,
+    lowerHand,
+    acknowledgeHand,
     inviteGuest,
     returnToGuest,
     actionExecuted,

@@ -12,7 +12,29 @@ import {
   Agenda,
   TokenResponse,
   StreamResponse,
+  Participant,
+  RaisedHand,
 } from "../types";
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function debounce<T extends (...args: any[]) => any>(
+  func: T,
+  wait: number
+): (...args: Parameters<T>) => void {
+  let timeout: ReturnType<typeof setTimeout> | null = null;
+  
+  return function(...args: Parameters<T>): void {
+    const later = () => {
+      timeout = null;
+      func(...args);
+    };
+    
+    if (timeout !== null) {
+      clearTimeout(timeout);
+    }
+    timeout = setTimeout(later, wait);
+  };
+}
 
 type StreamContextType = {
   roomName: string;
@@ -22,15 +44,13 @@ type StreamContextType = {
   setStreamMetadata: (metadata: StreamMetadata) => void;
   guestRequests: GuestRequest[];
   setGuestRequests: (requests: GuestRequest[]) => void;
+  raisedHands: RaisedHand[];
+  setRaisedHands: (hands: RaisedHand[]) => void;
   identity: string | undefined;
   setIdentity: (identity: string) => void;
-  showAgendaModal: boolean;
-  setShowAgendaModal: (show: boolean) => void;
-  showAddonModal: boolean;
-  setShowAddonModal: (show: boolean) => void;
-  showTransactionModal: boolean;
-  setShowTransactionModal: (show: boolean) => void;
   token: string | undefined;
+  nickname: string;
+  setNickname: React.Dispatch<React.SetStateAction<string>>;
   generateToken: (val: string, avatarUrl?: string) => Promise<void>;
   setToken: (token: string | undefined) => void;
   agendas: Agenda[];
@@ -41,6 +61,11 @@ type StreamContextType = {
   setAudioEnabled: (val: boolean) => void;
   videoEnabled: boolean;
   setVideoEnabled: (val: boolean) => void;
+  // New participant management
+  participants: Participant[];
+  participantCount: number;
+  isLoadingParticipants: boolean;
+  refreshParticipants: () => Promise<void>;
 };
 
 export const StreamContext = createContext<StreamContextType | null>(null);
@@ -63,24 +88,29 @@ export const StreamProvider = ({
   });
   const [userType, setUserType] = useState<UserType | null>(null);
   const [guestRequests, setGuestRequests] = useState<GuestRequest[]>([]);
+  const [raisedHands, setRaisedHands] = useState<RaisedHand[]>([]);
   const [identity, setIdentity] = useState<string>();
-  const [showAgendaModal, setShowAgendaModal] = useState<boolean>(false);
-  const [showAddonModal, setShowAddonModal] = useState<boolean>(false);
-  const [showTransactionModal, setShowTransactionModal] =
-    useState<boolean>(false);
   const [token, setToken] = useState<string>();
   const [agendas, setAgendas] = useState<Agenda[]>([]);
   const [audioEnabled, setAudioEnabled] = useState<boolean>(false);
   const [videoEnabled, setVideoEnabled] = useState<boolean>(false);
   const [currentTime, setCurrentTime] = useState<number>(0);
+  const [nickname, setNickname] = useState<string>("");
+
+  // Participant management state
+  const [participants, setParticipants] = useState<Participant[]>([]);
+  const [isLoadingParticipants, setIsLoadingParticipants] = useState<boolean>(true);
+  const lastParticipantUpdateRef = useRef(Date.now());
+  const fetchingParticipantsRef = useRef(false);
+  const participantsMapRef = useRef<Map<string, Participant>>(new Map());
 
   // Track if event listeners are registered to avoid duplicate listeners
-  const [eventListenersRegistered, setEventListenersRegistered] =
-    useState<boolean>(false);
+  const [eventListenersRegistered, setEventListenersRegistered] = useState<boolean>(false);
 
   // Refs for tracking component state and preserving values across renders
   const isMounted = useRef<boolean>(true);
   const guestRequestsRef = useRef<GuestRequest[]>([]);
+  const raisedHandsRef = useRef<RaisedHand[]>([]);
   const requestTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const { publicKey } = useRequirePublicKey();
@@ -89,11 +119,11 @@ export const StreamProvider = ({
   // Set component as mounted and handle cleanup
   useEffect(() => {
     isMounted.current = true;
-    console.log("StreamContext mounted");
+    // console.log("StreamContext mounted");
 
     return () => {
       isMounted.current = false;
-      console.log("StreamContext unmounted");
+      // console.log("StreamContext unmounted");
 
       // Clear any pending timers
       if (requestTimerRef.current) {
@@ -103,49 +133,113 @@ export const StreamProvider = ({
     };
   }, []);
 
-  // Debug logging for context state changes
+  // Fetch participants from the API
+  const fetchParticipants = useCallback(async () => {
+    if (fetchingParticipantsRef.current) return;
+    fetchingParticipantsRef.current = true;
+    
+    try {
+      setIsLoadingParticipants(true);
+      const data = await apiClient.get<{ participants: Participant[] }>(
+        `/participant/${roomName}`
+      );
+  
+      const activeParticipants = data.participants.filter(
+        (participant) => participant.leftAt === null
+      );
+  
+      participantsMapRef.current.clear();
+      activeParticipants.forEach(p => {
+        participantsMapRef.current.set(p.id, p);
+      });
+      
+      setParticipants(activeParticipants);
+      lastParticipantUpdateRef.current = Date.now();
+    } catch (err) {
+      console.error("Error fetching participants:", err);
+    } finally {
+      setIsLoadingParticipants(false);
+      fetchingParticipantsRef.current = false;
+    }
+  }, [roomName, apiClient]);
+
+  // Debounced fetch
+  const debouncedFetchRef = useRef<(() => void) | null>(null);
+  
   useEffect(() => {
-    console.log("userType updated:", userType);
-  }, [userType]);
+    debouncedFetchRef.current = debounce(() => {
+      if (Date.now() - lastParticipantUpdateRef.current > 10000) {
+        fetchParticipants();
+      }
+    }, 2000);
+  }, [fetchParticipants]);
+
+  const debouncedFetch = useCallback(() => {
+    if (debouncedFetchRef.current) {
+      debouncedFetchRef.current();
+    }
+  }, []);
 
   // Set up event listeners for WebSocket events
   useEffect(() => {
-    if (!roomName || !userType || !websocket) {
-      console.log("Not setting up event listeners - missing prerequisites", {
-        roomName,
-        userType,
-        websocketConnected: !!websocket,
-      });
+    if (!roomName || !userType || !websocket || eventListenersRegistered) {
       return;
     }
 
-    if (eventListenersRegistered) {
-      console.log("Event listeners already registered, skipping");
-      return;
-    }
-
-    console.log("Setting up WebSocket event listeners in StreamContext");
+    // console.log("Setting up WebSocket event listeners in StreamContext");
     setEventListenersRegistered(true);
+
+    // Handle participant events
+    const handleParticipantJoined = (data: { participantId: string }) => {
+      // console.log("Participant joined:", data.participantId);
+      if (!participantsMapRef.current.has(data.participantId)) {
+        debouncedFetch();
+      }
+    };
+
+    const handleParticipantLeft = (data: { participantId: string }) => {
+      // console.log("Participant left:", data.participantId);
+      setParticipants((prev) => {
+        const updated = prev.filter((p) => p.id !== data.participantId);
+        participantsMapRef.current.delete(data.participantId);
+        return updated;
+      });
+      lastParticipantUpdateRef.current = Date.now();
+    };
 
     // Listen for guest requests updates
     const handleGuestRequestsUpdate = (data: GuestRequest[]) => {
-      console.log("Stream context received guest requests update:", data);
-
+      // console.log("Stream context received guest requests update:", data);
       if (!isMounted.current || !data) return;
-
-      // Create a stable copy of the array and ensure it's not empty
       const requestsCopy = Array.isArray(data) ? [...data] : [];
-
-      // Store in ref for persistence across renders
       guestRequestsRef.current = requestsCopy;
-
-      // Update state
       setGuestRequests(requestsCopy);
+    };
+
+    // Handle raised hands updates
+    const handleRaisedHandsUpdate = (data: RaisedHand[]) => {
+      // console.log("Stream context received raised hands update:", data);
+      if (!isMounted.current || !data) return;
+      
+      const handsCopy = Array.isArray(data) ? [...data] : [];
+      raisedHandsRef.current = handsCopy;
+      setRaisedHands(handsCopy);
+    };
+
+    // Handle hand acknowledged (for participants who raised their hand)
+    const handleHandAcknowledged = (data: { roomName: string }) => {
+      if (data.roomName === roomName) {
+        addNotification({
+          type: "success",
+          message: "Your raised hand has been acknowledged!",
+          duration: 3000,
+        });
+      }
     };
 
     // Listen for time sync
     const handleTimeSync = (serverTime: number) => {
-      console.log("Time sync received:", serverTime);
+      // console.log("Time sync received:", serverTime);
       setCurrentTime(serverTime);
     };
 
@@ -155,99 +249,112 @@ export const StreamProvider = ({
       executedActions: string[];
       joinTime: number;
     }) => {
-      console.log("Initial sync received:", data);
+      // console.log("Initial sync received:", data);
       setCurrentTime(data.currentTime);
 
-      // Re-request guest requests when we get initial sync
       if (websocket.isConnected && userType === "host") {
-        // Clear any existing timer
         if (requestTimerRef.current) {
           clearTimeout(requestTimerRef.current);
         }
 
-        // Set a new timer
         requestTimerRef.current = setTimeout(() => {
-          console.log("Requesting guest requests after initial sync");
+          // console.log("Requesting guest requests after initial sync");
           if (websocket.isConnected && isMounted.current) {
             websocket.sendMessage("getGuestRequests", { roomName });
           }
           requestTimerRef.current = null;
         }, 1000);
       }
+
+      // Request raised hands for meetings
+      if (streamMetadata.streamSessionType === "meeting") {
+        setTimeout(() => {
+          if (websocket.isConnected && isMounted.current) {
+            websocket.sendMessage("getRaisedHands", { roomName });
+          }
+        }, 1100);
+      }
     };
 
     // Add event listeners
-    websocket.addEventListener(
-      "guestRequestsUpdate",
-      handleGuestRequestsUpdate
-    );
+    websocket.addEventListener("participantJoined", handleParticipantJoined);
+    websocket.addEventListener("participantLeft", handleParticipantLeft);
+    websocket.addEventListener("guestRequestsUpdate", handleGuestRequestsUpdate);
+    websocket.addEventListener("raisedHandsUpdate", handleRaisedHandsUpdate);
+    websocket.addEventListener("handAcknowledged", handleHandAcknowledged);
     websocket.addEventListener("timeSync", handleTimeSync);
     websocket.addEventListener("initialSync", handleInitialSync);
 
-    // Explicitly request guest requests when first connected
-    if (websocket.isConnected && userType === "host") {
-      // Clear any existing timer
-      if (requestTimerRef.current) {
-        clearTimeout(requestTimerRef.current);
-      }
+    // Initial fetch
+    fetchParticipants();
 
-      // Set a new timer
-      requestTimerRef.current = setTimeout(() => {
-        console.log("Initial request for guest requests");
-        if (websocket.isConnected && isMounted.current) {
-          websocket.sendMessage("getGuestRequests", { roomName });
-        }
-        requestTimerRef.current = null;
-      }, 1000);
-    }
-
-    // Clean up event listeners when component unmounts
+    // Cleanup
     return () => {
-      console.log("Cleaning up stream context event listeners");
+      // console.log("Cleaning up stream context event listeners");
       if (websocket) {
-        websocket.removeEventListener(
-          "guestRequestsUpdate",
-          handleGuestRequestsUpdate
-        );
+        websocket.removeEventListener("participantJoined", handleParticipantJoined);
+        websocket.removeEventListener("participantLeft", handleParticipantLeft);
+        websocket.removeEventListener("guestRequestsUpdate", handleGuestRequestsUpdate);
+        websocket.removeEventListener("raisedHandsUpdate", handleRaisedHandsUpdate);
+        websocket.removeEventListener("handAcknowledged", handleHandAcknowledged);
         websocket.removeEventListener("timeSync", handleTimeSync);
         websocket.removeEventListener("initialSync", handleInitialSync);
       }
       setEventListenersRegistered(false);
 
-      // Clear any pending timers
       if (requestTimerRef.current) {
         clearTimeout(requestTimerRef.current);
         requestTimerRef.current = null;
       }
     };
-  }, [roomName, userType, websocket, websocket?.isConnected]);
+  }, [roomName, userType, websocket, websocket?.isConnected, debouncedFetch, fetchParticipants, streamMetadata.streamSessionType, addNotification]);
+
+  // Periodic refresh
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (Date.now() - lastParticipantUpdateRef.current > 120000) {
+        fetchParticipants();
+      }
+    }, 120000);
+    
+    return () => clearInterval(interval);
+  }, [fetchParticipants]);
 
   // Handle WebSocket reconnections
   useEffect(() => {
     if (!websocket || !roomName || !userType) return;
 
     const handleWebSocketConnect = () => {
-      console.log("WebSocket reconnected - refreshing guest requests");
-
-      // Reset listeners registered flag to allow re-registration
+      // console.log("WebSocket reconnected - refreshing data");
       setEventListenersRegistered(false);
 
-      // Request guest requests again after connection reestablished
       if (userType === "host" && websocket.isConnected && isMounted.current) {
-        // Clear any existing timer
         if (requestTimerRef.current) {
           clearTimeout(requestTimerRef.current);
         }
 
-        // Set a new timer
         requestTimerRef.current = setTimeout(() => {
-          console.log("Re-requesting guest requests after reconnect");
+          // console.log("Re-requesting guest requests after reconnect");
           if (websocket.isConnected && isMounted.current) {
             websocket.sendMessage("getGuestRequests", { roomName });
           }
           requestTimerRef.current = null;
         }, 1500);
       }
+
+      // Request raised hands for meetings after reconnect
+      if (streamMetadata.streamSessionType === "meeting") {
+        setTimeout(() => {
+          if (websocket.isConnected && isMounted.current) {
+            websocket.sendMessage("getRaisedHands", { roomName });
+          }
+        }, 1600);
+      }
+
+      // Refresh participants after reconnect
+      setTimeout(() => {
+        fetchParticipants();
+      }, 2000);
     };
 
     window.addEventListener("connect", handleWebSocketConnect);
@@ -255,13 +362,12 @@ export const StreamProvider = ({
     return () => {
       window.removeEventListener("connect", handleWebSocketConnect);
 
-      // Clear any pending timers
       if (requestTimerRef.current) {
         clearTimeout(requestTimerRef.current);
         requestTimerRef.current = null;
       }
     };
-  }, [websocket, roomName, userType]);
+  }, [websocket, roomName, userType, fetchParticipants, streamMetadata.streamSessionType]);
 
   // Fetch stream data
   useEffect(() => {
@@ -324,29 +430,26 @@ export const StreamProvider = ({
           return;
         }
 
-        console.log("Token generated with user type:", tokenRes.userType);
+        // console.log("Token generated with user type:", tokenRes.userType);
         setToken(tokenRes.token);
-        setUserType(tokenRes.userType); // Make sure this is executed
+        setUserType(tokenRes.userType);
 
-        // Request existing guest requests right after authentication
         if (
           websocket &&
           websocket.isConnected &&
           tokenRes.userType === "host"
         ) {
-          console.log(
-            "Host login detected - will request existing guest requests"
-          );
+          // console.log(
+          //   "Host login detected - will request existing guest requests"
+          // );
 
-          // Clear any existing timer
           if (requestTimerRef.current) {
             clearTimeout(requestTimerRef.current);
           }
 
-          // Set a new timer
           requestTimerRef.current = setTimeout(() => {
             if (websocket.isConnected && isMounted.current) {
-              console.log("Requesting guest requests after authentication");
+              // console.log("Requesting guest requests after authentication");
               websocket.sendMessage("getGuestRequests", { roomName });
             }
             requestTimerRef.current = null;
@@ -374,14 +477,10 @@ export const StreamProvider = ({
         setStreamMetadata,
         guestRequests,
         setGuestRequests,
+        raisedHands,
+        setRaisedHands,
         identity,
         setIdentity,
-        showAgendaModal,
-        setShowAgendaModal,
-        showAddonModal,
-        setShowAddonModal,
-        showTransactionModal,
-        setShowTransactionModal,
         token,
         generateToken,
         setToken,
@@ -393,6 +492,13 @@ export const StreamProvider = ({
         setAudioEnabled,
         audioEnabled,
         videoEnabled,
+        nickname, 
+        setNickname,
+        // Participant management
+        participants,
+        participantCount: participants.length,
+        isLoadingParticipants,
+        refreshParticipants: fetchParticipants,
       }}
     >
       {children}

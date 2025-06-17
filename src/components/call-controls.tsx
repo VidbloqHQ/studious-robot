@@ -4,7 +4,7 @@ import BaseCallControls, {
 } from "./base-call-controls";
 import { Icon } from "./icons";
 import { isMobileDevice } from "../utils";
-import { useParticipantList } from "../hooks";
+import { useParticipantList, useStreamContext } from "../hooks";
 import {
   MicrophoneControl,
   ScreenShareControl,
@@ -55,6 +55,7 @@ const CallControls: React.FC<CallControlsProps> = ({
   onRecordToggle,
 }) => {
   const { participants, count } = useParticipantList();
+  const { streamMetadata } = useStreamContext();
 
   const [showLink, setShowLink] = useState<boolean>(false);
   const [showChat, setShowChat] = useState<boolean>(false);
@@ -85,6 +86,11 @@ const CallControls: React.FC<CallControlsProps> = ({
       toggleMic,
       toggleScreenShare,
       toggleRecording,
+      // New raise hand props
+      isHandRaised,
+      canRaiseHand,
+      raiseHand,
+      lowerHand,
     } = props;
 
     return (
@@ -220,8 +226,8 @@ const CallControls: React.FC<CallControlsProps> = ({
 
             {/* Icon group - main middle section */}
             <div className="bg-secondary-light [#F2EFFE] rounded-full py-2 px-3 flex items-center space-x-2">
-              {/* Raise hand */}
-              {isGuest && !hasPendingRequest && (
+              {/* Raise hand for LIVESTREAMS (existing logic) */}
+              {streamMetadata.streamSessionType === "livestream" && isGuest && !hasPendingRequest && (
                 <div
                   className="bg-[var(--sdk-bg-primary-color)] p-0.5 rounded-2xl cursor-pointer h-[44px] w-[44px]"
                   onClick={requestToSpeak}
@@ -239,7 +245,7 @@ const CallControls: React.FC<CallControlsProps> = ({
                 </div>
               )}
 
-              {isGuest && hasPendingRequest && (
+              {streamMetadata.streamSessionType === "livestream" && isGuest && hasPendingRequest && (
                 <div className="bg-[var(--sdk-bg-primary-color)] p-0.5 rounded-2xl cursor-pointer h-[44px] w-[44px]">
                   {components?.RaiseHandButton ? (
                     <components.RaiseHandButton
@@ -249,6 +255,45 @@ const CallControls: React.FC<CallControlsProps> = ({
                   ) : (
                     <div className="bg-[#DCCCF63D] rounded-2xl h-full flex flex-col items-center justify-center">
                       <Icon name="hand" className="text-green-500" />
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Raise hand for MEETINGS (new logic) */}
+              {streamMetadata.streamSessionType === "meeting" && canRaiseHand && !isHandRaised && (
+                <div
+                  className="bg-[var(--sdk-bg-primary-color)] p-0.5 rounded-2xl cursor-pointer h-[44px] w-[44px]"
+                  onClick={raiseHand}
+                  title="Raise hand to speak"
+                >
+                  {components?.RaiseHandButton ? (
+                    <components.RaiseHandButton
+                      requested={false}
+                      request={raiseHand}
+                    />
+                  ) : (
+                    <div className="bg-[#DCCCF63D] rounded-2xl h-full flex flex-col items-center justify-center">
+                      <Icon name="hand" className="text-primary" />
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {streamMetadata.streamSessionType === "meeting" && canRaiseHand && isHandRaised && (
+                <div
+                  className="bg-[var(--sdk-bg-primary-color)] p-0.5 rounded-2xl cursor-pointer h-[44px] w-[44px]"
+                  onClick={lowerHand}
+                  title="Lower hand"
+                >
+                  {components?.RaiseHandButton ? (
+                    <components.RaiseHandButton
+                      requested={true}
+                      request={lowerHand}
+                    />
+                  ) : (
+                    <div className="bg-primary rounded-2xl h-full flex flex-col items-center justify-center">
+                      <Icon name="hand" className="text-white animate-pulse" />
                     </div>
                   )}
                 </div>

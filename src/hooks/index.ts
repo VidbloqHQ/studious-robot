@@ -3,7 +3,6 @@ export * from "./useRequirePublicKey";
 export * from "./useWalletContext";
 export * from "./useStreamAddons";
 export * from "./useStreamContext";
-// export * from "./useStreamSync";
 export * from "./useHandleStreamDisconnect";
 export * from "./useParticipant";
 export * from "./useClickOutside";

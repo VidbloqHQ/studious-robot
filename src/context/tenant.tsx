@@ -32,12 +32,12 @@ export const TenantProvider = ({
     reconnectInterval: 10000, // 10 seconds between reconnect attempts
     reconnectAttempts: 3,
     onOpen: () => {
-      console.log("WebSocket connected");
+      // console.log("WebSocket connected");
       // Authenticate immediately after connection
       ws.sendMessage("authenticate", { apiKey, apiSecret });
     },
     onClose: () => {
-      console.log("WebSocket disconnected");
+      // console.log("WebSocket disconnected");
       setIsConnected(false);
     },
     onError: (error) => {
