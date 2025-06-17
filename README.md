@@ -1,54 +1,109 @@
-# React + TypeScript + Vite
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+````
+# 🧰 Stream Wallet SDK for Solana
 
-Currently, two official plugins are available:
+A lightweight TypeScript/React SDK to interact with the [Stream Wallet Program](https://github.com/YOUR_USERNAME/stream-wallet-program) on the Solana blockchain. This SDK enables developers to easily integrate stream-based token deposit, distribution, and refund workflows into their dApps.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+> ✅ Built for the Solana ecosystem using Anchor and React  
+> 🔌 Focused on developer experience—simple hooks, minimal boilerplate
 
-## Expanding the ESLint configuration
+## ✨ Features
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+- 🔄 Create and manage stream wallets (PDAs)
+- 💸 Deposit SPL tokens into on-chain stream wallets
+- 🪙 Distribute tokens to stream participants
+- 🔁 Refund donors if a stream is canceled or ends
+- 🧩 React hooks for seamless integration into frontend apps
 
-```js
-export default tseslint.config({
-  extends: [
-    // Remove ...tseslint.configs.recommended and replace with this
-    ...tseslint.configs.recommendedTypeChecked,
-    // Alternatively, use this for stricter rules
-    ...tseslint.configs.strictTypeChecked,
-    // Optionally, add this for stylistic rules
-    ...tseslint.configs.stylisticTypeChecked,
-  ],
-  languageOptions: {
-    // other options...
-    parserOptions: {
-      project: ['./tsconfig.node.json', './tsconfig.app.json'],
-      tsconfigRootDir: import.meta.dirname,
-    },
-  },
-})
+````
+## 📦 Installation
+
+```
+npm install @vidbloq/react
+```
+or
+```
+yarn add @vidbloq/react
+````
+
+## 🚀 Quick Start
+
+```ts
+import { useStreamWallet } from '@your-scope/stream-wallet-sdk';
+
+const {
+  createStream,
+  depositTokens,
+  distributeTokens,
+  refundTokens,
+} = useStreamWallet({ connection, wallet });
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Each function returns a Promise that resolves once the transaction is confirmed.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+### Example: Creating a Stream
 
-export default tseslint.config({
-  plugins: {
-    // Add the react-x and react-dom plugins
-    'react-x': reactX,
-    'react-dom': reactDom,
-  },
-  rules: {
-    // other rules...
-    // Enable its recommended typescript rules
-    ...reactX.configs['recommended-typescript'].rules,
-    ...reactDom.configs.recommended.rules,
-  },
-})
+```ts
+await createStream({
+  streamId: 'my-stream',
+  authority: wallet.publicKey,
+  // optional metadata like description or participant info
+});
 ```
+
+## 🧠 SDK API Overview
+
+| Hook Function      | Description                                       |
+| ------------------ | ------------------------------------------------- |
+| `createStream`     | Initializes a stream wallet (PDA)                 |
+| `depositTokens`    | Deposits SPL tokens into the stream wallet        |
+| `distributeTokens` | Distributes tokens to specified wallet addresses  |
+| `refundTokens`     | Refunds donors or resets wallet state post-stream |
+
+All interactions are permissioned based on the wallet provider passed into the hook.
+
+## 🔧 Configuration
+
+The hook accepts an object with:
+
+* `connection`: a `Connection` instance from `@solana/web3.js`
+* `wallet`: a `wallet-adapter` compatible object
+
+Example:
+
+```ts
+const connection = new Connection(clusterApiUrl('devnet'));
+const { publicKey, signTransaction, signAllTransactions } = useWallet();
+```
+
+## 🧪 Running the Demo Locally
+
+Clone the repo:
+
+```bash
+git clone https://github.com/YOUR_USERNAME/stream-wallet-sdk.git
+cd stream-wallet-sdk
+npm install
+npm run dev
+```
+
+> Connect your wallet on Devnet and try running `createStream()` and other functions in the demo.
+
+## 🧱 Powered By
+
+* [Solana Web3.js](https://github.com/solana-labs/solana-web3.js)
+* [Anchor](https://book.anchor-lang.com/)
+* [React](https://reactjs.org/)
+* [Vite](https://vitejs.dev/) (for demo site)
+
+## 🌍 Related Projects
+
+* [🎥 Vidbloq Program] - https://github.com/VidbloqHQ/bookish-octo-doodle
+* [🌐 SDK Demo Site] - https://jade-duckanoo-edb1bd.netlify.app/
+
+## 🧑‍💻 Author
+
+**Chiamaka Ezemba** –  https://x.com/Ada_ezemba
+Passionate about building real-time, decentralized tools on Solana.
+
+
