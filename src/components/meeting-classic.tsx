@@ -1,44 +1,29 @@
-import React, { ReactElement } from "react";
-import { VideoTrack, AudioTrack } from "@livekit/components-react";
+import { ReactElement } from "react";
+import {
+  VideoTrack,
+  AudioTrack,
+  TrackReference,
+} from "@livekit/components-react";
 import { Track } from "livekit-client";
-import { TrackReference } from "@livekit/components-react";
 import ParticipantView from "./participant";
 import { useMeeting } from "../hooks/index";
-import { 
-  checkParticipantMicEnabled, 
-  checkIfLocalParticipant 
+import {
+  checkParticipantMicEnabled,
+  checkIfLocalParticipant,
 } from "../utils/index";
 import ParticipantControls from "./participant-controls";
 
 interface MeetingViewProps {
   hasAgenda?: boolean;
-  className?: string;
-  style?: React.CSSProperties;
-  components?: {
-    AgendaComponent?: React.FC;
-    ParticipantComponent?: React.FC<{
-      track: TrackReference;
-      isMainHost?: boolean;
-      isActive: boolean;
-    }>;
-    OverflowComponent?: React.FC<{
-      count: number;
-      overflowTracks: TrackReference[];
-    }>;
-  };
 }
 
 export default function MeetingView({
   hasAgenda = false,
-  className = "",
-  style,
-  components,
 }: MeetingViewProps) {
   const {
     activeSpeaker,
     screenShareTrack,
     mainDisplayTrack,
-    displayedCoHosts,
     overflowCount,
     getBottomRowParticipants,
     calculateLayoutType,
@@ -46,8 +31,17 @@ export default function MeetingView({
     overflowTracks,
     room,
     screenSize,
-  } = useMeeting();
-  
+    coHostTracks,
+    getMaxVisibleCoHosts,
+  } = useMeeting(
+    {
+    maxVisibleCoHosts: {
+      xs: 12,
+      sm: 12,
+    },
+  }
+);
+
   // Determine mobile view at the component level
   const isMobileView = screenSize === "xs" || screenSize === "sm";
 
@@ -76,11 +70,6 @@ export default function MeetingView({
   // Render the overflow indicator
   const renderOverflow = (count: number): ReactElement | null => {
     if (count <= 0) return null;
-
-    // Use custom component if provided
-    if (components?.OverflowComponent) {
-      return React.createElement(components.OverflowComponent, { count, overflowTracks });
-    }
 
     const displayedAvatars = overflowTracks.slice(0, 4);
     return (
@@ -128,11 +117,6 @@ export default function MeetingView({
 
   // Render agenda section
   const renderAgenda = (): ReactElement => {
-    // Use custom agenda component if provided
-    if (components?.AgendaComponent) {
-      return React.createElement(components.AgendaComponent);
-    }
-
     return (
       <div className="bg-white rounded-lg h-full p-5 overflow-y-auto">
         <div className="flex justify-between items-center mb-6">
@@ -225,65 +209,74 @@ export default function MeetingView({
     );
   };
 
-// Updated renderParticipant function with height constraint for camera on state
-const renderParticipant = (
-  track: TrackReference,
-  isMainHost = false
-): ReactElement | null => {
-  if (!track || !track.participant) return null;
+  // Updated renderParticipant function with consistent sizing
+  const renderParticipant = (
+    track: TrackReference,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    isMainHost = false
+  ): ReactElement | null => {
+    if (!track || !track.participant) return null;
 
-  if (components?.ParticipantComponent) {
-    return React.createElement(components.ParticipantComponent, {
-      track,
-      isMainHost,
-      isActive: track.participant.identity === activeSpeaker,
-    });
-  }
+    // Check camera status
+    const isCameraOn = track.publication && !track.publication.isMuted;
 
-  // Check camera status
-  const isCameraOn = track.publication && !track.publication.isMuted;
-  
-  // Use the utility function for microphone status
-  const isMicrophoneOn = checkParticipantMicEnabled(track.participant);
+    // Use the utility function for microphone status
+    const isMicrophoneOn = checkParticipantMicEnabled(track.participant);
 
-  const isScreenShare =
-    track.source === Track.Source.ScreenShare &&
-    track.publication?.isSubscribed &&
-    track.publication?.isEnabled;
+    const isScreenShare =
+      track.source === Track.Source.ScreenShare &&
+      track.publication?.isSubscribed &&
+      track.publication?.isEnabled;
 
-  const isActive = track.participant.identity === activeSpeaker;
-  const uniqueKey = `${track.participant.sid}-${track.source}`;
-  
-  // Use the utility function for local participant check
-  const isLocalParticipant = checkIfLocalParticipant(track.participant, room);
+    const isActive = track.participant.identity === activeSpeaker;
+    const uniqueKey = `${track.participant.sid}-${track.source}`;
 
-  return (
-    <div key={uniqueKey} className="h-full w-full">
-      <div
-        className={`relative rounded-lg overflow-hidden bg-red-900 h-full ${
-          isActive ? "ring-2 ring-primary" : ""
-        }`}
-      >
-        {isScreenShare ? (
-          // Screen share view remains full height but with max-height constraint
-          <div className="h-full w-full max-h-[calc(100vh-160px)]">
-            <VideoTrack
-              trackRef={track}
-              className="h-full w-full object-cover"
-            />
-          </div>
-        ) : (
-          <div className="h-full w-full flex items-center justify-center">
-            {isCameraOn ? (
-              // KEY FIX: Explicitly limit the video height with max-height
-              <div className="relative w-full h-full" style={{ maxHeight: "calc(100vh - 160px)" }}>
-                <VideoTrack
-                  trackRef={track}
-                  className="w-full h-full object-cover"
-                />
-                
-                {/* Add ParticipantControls on video view */}
-                <ParticipantControls
+    // Use the utility function for local participant check
+    const isLocalParticipant = checkIfLocalParticipant(track.participant, room);
+
+    return (
+      <div key={uniqueKey} className="h-full w-full">
+        <div
+          className={`relative rounded-lg overflow-hidden bg-red-900 h-full w-full ${
+            isActive ? "ring-2 ring-primary" : ""
+          }`}
+        >
+          {isScreenShare ? (
+            // Screen share view with proper constraints
+            <div className="h-full w-full flex items-center justify-center">
+              <VideoTrack
+                trackRef={track}
+                className="w-full h-full object-contain"
+              />
+            </div>
+          ) : (
+            <div className="h-full w-full flex items-center justify-center">
+              {isCameraOn ? (
+                // Camera on - maintain consistent sizing with absolute positioning
+                <div className="relative w-full h-full">
+                  <div className="absolute inset-0">
+                    <VideoTrack
+                      trackRef={track}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+
+                  {/* Add ParticipantControls on video view */}
+                  <div className="absolute inset-0">
+                    <ParticipantControls
+                      participant={track.participant}
+                      isLocal={isLocalParticipant}
+                      isMicrophoneEnabled={isMicrophoneOn}
+                      isCameraEnabled={isCameraOn}
+                      onGiftClick={(participant) => {
+                        console.log("Gift clicked for", participant.identity);
+                      }}
+                    />
+                  </div>
+                </div>
+              ) : (
+                // Camera off - ParticipantView
+                <ParticipantView
                   participant={track.participant}
                   isLocal={isLocalParticipant}
                   isMicrophoneEnabled={isMicrophoneOn}
@@ -292,27 +285,15 @@ const renderParticipant = (
                     console.log("Gift clicked for", participant.identity);
                   }}
                 />
-              </div>
-            ) : (
-              // Camera off - ParticipantView (already has correct sizing)
-              <ParticipantView 
-                participant={track.participant}
-                isLocal={isLocalParticipant}
-                isMicrophoneEnabled={isMicrophoneOn}
-                isCameraEnabled={isCameraOn}
-                onGiftClick={(participant) => {
-                  console.log("Gift clicked for", participant.identity);
-                }}
-              />
-            )}
-          </div>
-        )}
+              )}
+            </div>
+          )}
 
-        {track.publication?.track && <AudioTrack trackRef={track} />}
+          {track.publication?.track && <AudioTrack trackRef={track} />}
+        </div>
       </div>
-    </div>
-  );
-};
+    );
+  };
 
   // Render participant with key wrapper
   const renderParticipantElement = (
@@ -326,7 +307,7 @@ const renderParticipant = (
         </div>
       );
     }
-    
+
     const key =
       track.participant?.identity ||
       track.participant?.sid ||
@@ -340,123 +321,216 @@ const renderParticipant = (
 
   // MOBILE LAYOUT LOGIC
   const renderParticipantGrid = () => {
-    const allParticipants = [mainDisplayTrack, ...displayedCoHosts].filter(Boolean);
-    if (allParticipants.length === 0) {
-      return <div className="h-full w-full flex items-center justify-center text-gray-400">No participants</div>;
+    // Get all camera tracks including ones beyond the display limit
+    const allCameraTracks = [mainDisplayTrack, ...coHostTracks].filter(Boolean);
+    const maxVisible = getMaxVisibleCoHosts();
+    
+    // Calculate what should be displayed vs overflow
+    const displayedTracks = allCameraTracks.slice(0, maxVisible);
+    const overflowTracksCount = allCameraTracks.length - maxVisible;
+    const hasOverflow = overflowTracksCount > 0;
+    
+    if (displayedTracks.length === 0) {
+      return (
+        <div className="h-full w-full flex items-center justify-center text-gray-400">
+          No participants
+        </div>
+      );
     }
-    
-    const participantCount = allParticipants.length;
-    // Use screenSize from the top-level hook call rather than calling it again
-    const isMobileView = screenSize === "xs" || screenSize === "sm";
-    
+
+    const participantCount = displayedTracks.length;
+    const totalWithOverflow = participantCount + (hasOverflow ? 1 : 0);
+
     // MOBILE LAYOUT LOGIC
     if (isMobileView) {
-      // Adjust grid rows based on participant count
-      if (participantCount === 1) {
+      if (participantCount === 1 && !hasOverflow) {
         // Single participant - take up full space
         return (
           <div className="h-full w-full">
-            {renderParticipantElement(allParticipants[0], allParticipants[0] === mainDisplayTrack)}
+            {renderParticipantElement(
+              displayedTracks[0],
+              displayedTracks[0] === mainDisplayTrack
+            )}
           </div>
         );
-      } else if (participantCount === 2) {
-        // Two participants - evenly divide space
+      } else if (participantCount === 2 && !hasOverflow) {
+        // Two participants - evenly divide space (original layout)
         return (
           <div className="grid grid-rows-2 gap-2 h-full">
-            {allParticipants.map((track, index) => (
+            {displayedTracks.map((track, index) => (
               <div key={index} className="h-full w-full">
                 {renderParticipantElement(track, track === mainDisplayTrack)}
               </div>
             ))}
           </div>
         );
-      } else if (participantCount === 3) {
-        // Exactly 3 participants - 3 rows with last participant taking full width
+      } else if (participantCount === 3 && !hasOverflow) {
+        // Exactly 3 participants - 3 rows (original layout)
         return (
           <div className="grid grid-rows-3 gap-2 h-full">
-            {/* First two participants */}
-            {allParticipants.slice(0, 2).map((track, index) => (
+            {displayedTracks.map((track, index) => (
               <div key={index} className="h-full w-full">
                 {renderParticipantElement(track, track === mainDisplayTrack)}
               </div>
             ))}
-            
-            {/* Third participant - full width */}
-            <div className="h-full w-full">
-              {renderParticipantElement(allParticipants[2], allParticipants[2] === mainDisplayTrack)}
-            </div>
           </div>
         );
-      } else {
-        // More than 3 participants - use 3 rows with last row for remaining + overflow
-        const firstParticipant = allParticipants[0];
-        const secondParticipant = allParticipants[1];
-        const remainingParticipants = allParticipants.slice(2);
-        
+      } else if (totalWithOverflow === 4) {
+        // 4 items total: 1 top (full width), 1 middle (full width), 2 bottom
         return (
           <div className="grid grid-rows-3 gap-2 h-full">
-            {/* First row - first participant */}
-            <div className="h-full w-full">
-              {renderParticipantElement(firstParticipant, firstParticipant === mainDisplayTrack)}
+            {/* Top row - 1 participant full width */}
+            <div className="relative overflow-hidden">
+              {renderParticipantElement(displayedTracks[0], displayedTracks[0] === mainDisplayTrack)}
             </div>
             
-            {/* Second row - second participant */}
-            <div className="h-full w-full">
-              {renderParticipantElement(secondParticipant, secondParticipant === mainDisplayTrack)}
+            {/* Middle row - 1 participant full width */}
+            <div className="relative overflow-hidden">
+              {renderParticipantElement(displayedTracks[1], displayedTracks[1] === mainDisplayTrack)}
             </div>
             
-            {/* Third row - all remaining participants + overflow */}
-            <div className="grid grid-cols-2 gap-2 h-full">
-              {remainingParticipants.map((track, index) => (
-                <div key={index} className="h-full w-full">
+            {/* Bottom row - 2 items */}
+            <div className="grid grid-cols-2 gap-2">
+              {displayedTracks.slice(2).map((track, index) => (
+                <div key={index} className="relative overflow-hidden">
                   {renderParticipantElement(track, track === mainDisplayTrack)}
                 </div>
               ))}
-              
-              {/* Include overflow in the third row */}
-              {overflowCount > 0 && (
-                <div className="h-full w-full">
-                  {renderOverflow(overflowCount)}
+              {hasOverflow && (
+                <div className="relative overflow-hidden">
+                  {renderOverflow(overflowTracksCount)}
                 </div>
               )}
             </div>
           </div>
         );
+      } else if (totalWithOverflow === 5) {
+        // 5 items total: 1 top (full width), 2 middle, 2 bottom
+        return (
+          <div className="grid grid-rows-3 gap-2 h-full">
+            {/* Top row - 1 participant full width */}
+            <div className="relative overflow-hidden">
+              {renderParticipantElement(displayedTracks[0], displayedTracks[0] === mainDisplayTrack)}
+            </div>
+            
+            {/* Middle row - 2 participants */}
+            <div className="grid grid-cols-2 gap-2">
+              {displayedTracks.slice(1, 3).map((track, index) => (
+                <div key={index} className="relative overflow-hidden">
+                  {renderParticipantElement(track, track === mainDisplayTrack)}
+                </div>
+              ))}
+            </div>
+            
+            {/* Bottom row - 2 items */}
+            <div className="grid grid-cols-2 gap-2">
+              {displayedTracks.slice(3).map((track, index) => (
+                <div key={index} className="relative overflow-hidden">
+                  {renderParticipantElement(track, track === mainDisplayTrack)}
+                </div>
+              ))}
+              {hasOverflow && (
+                <div className="relative overflow-hidden">
+                  {renderOverflow(overflowTracksCount)}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      } else if (totalWithOverflow === 6) {
+        // 6 items total: 2 per row across 3 rows
+        return (
+          <div className="grid grid-rows-3 gap-2 h-full">
+            {[0, 1, 2].map((rowIndex) => (
+              <div key={rowIndex} className="grid grid-cols-2 gap-2">
+                {displayedTracks.slice(rowIndex * 2, rowIndex * 2 + 2).map((track, index) => (
+                  <div key={index} className="relative overflow-hidden">
+                    {renderParticipantElement(track, track === mainDisplayTrack)}
+                  </div>
+                ))}
+                {rowIndex === 2 && hasOverflow && displayedTracks.length <= 5 && (
+                  <div className="relative overflow-hidden">
+                    {renderOverflow(overflowTracksCount)}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        );
+      } else {
+        // More than 6 items - use max 3x3 grid with overflow
+        const maxVisibleItems = 8; // 3x3 grid minus 1 for overflow
+        const visibleParticipants = displayedTracks.slice(0, maxVisibleItems);
+        
+        return (
+          <div className="grid grid-rows-3 gap-2 h-full">
+            {[0, 1, 2].map((rowIndex) => (
+              <div key={rowIndex} className="grid grid-cols-3 gap-2">
+                {visibleParticipants.slice(rowIndex * 3, rowIndex * 3 + 3).map((track, index) => (
+                  <div key={index} className="relative overflow-hidden">
+                    {renderParticipantElement(track, track === mainDisplayTrack)}
+                  </div>
+                ))}
+                {rowIndex === 2 && hasOverflow && visibleParticipants.length <= rowIndex * 3 + 2 && (
+                  <div className="relative overflow-hidden">
+                    {renderOverflow(overflowTracksCount)}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        );
       }
     }
-    
-    // DESKTOP LAYOUT LOGIC - For 3 participants, use a single row with evenly distributed columns
-    if (participantCount === 3) {
+
+    // DESKTOP LAYOUT LOGIC
+    if (participantCount === 1 && !hasOverflow) {
+      // Single participant - take up full space with fixed container
+      return (
+        <div className="h-full w-full relative overflow-hidden">
+          {displayedTracks[0] &&
+            renderParticipantElement(displayedTracks[0], true)}
+        </div>
+      );
+    } else if (participantCount === 2 && !hasOverflow) {
+      // 2 participants
+      return (
+        <div className={`${hasAgenda ? "flex flex-col" : "flex"} gap-2 h-full`}>
+          {displayedTracks.map((track, index) => (
+            <div key={index} className="flex-1 h-full">
+              {renderParticipantElement(track, track === mainDisplayTrack)}
+            </div>
+          ))}
+        </div>
+      );
+    } else if (participantCount === 3 && !hasOverflow) {
       return (
         <div className="grid grid-cols-3 gap-2 h-full">
-          {allParticipants.map((track, index) => (
+          {displayedTracks.map((track, index) => (
             <div key={index} className="col-span-1 h-full">
               {renderParticipantElement(track, track === mainDisplayTrack)}
             </div>
           ))}
         </div>
       );
-    }
-    
-    // For 4 participants, use a single row with 4 equal columns
-    if (participantCount === 4) {
+    } else if (participantCount === 4 && !hasOverflow) {
       return (
         <div className="grid grid-cols-4 gap-2 h-full">
-          {allParticipants.map((track, index) => (
+          {displayedTracks.map((track, index) => (
             <div key={index} className="col-span-1 h-full">
               {renderParticipantElement(track, track === mainDisplayTrack)}
             </div>
           ))}
         </div>
       );
-    }
-    
-    // For more than 4 participants, use a 2-row grid layout
-    if (participantCount > 4) {
-      const firstRowCount = Math.ceil(participantCount / 2);
-      const firstRowParticipants = allParticipants.slice(0, firstRowCount);
-      const secondRowParticipants = allParticipants.slice(firstRowCount);
-      
+    } else {
+      // For more than 4 participants or when overflow exists
+      const totalItems = participantCount + (hasOverflow ? 1 : 0);
+      const itemsPerRow = Math.ceil(totalItems / 2);
+      const firstRowCount = Math.min(itemsPerRow, displayedTracks.length);
+      const firstRowParticipants = displayedTracks.slice(0, firstRowCount);
+      const secondRowParticipants = displayedTracks.slice(firstRowCount);
+
       return (
         <div className="flex flex-col h-full gap-2">
           <div className="flex gap-2 h-1/2">
@@ -472,54 +546,32 @@ const renderParticipant = (
                 {renderParticipantElement(track, false)}
               </div>
             ))}
-            {overflowCount > 0 && (
+            {hasOverflow && (
               <div className="flex-1 h-full">
-                {renderOverflow(overflowCount)}
+                {renderOverflow(overflowTracksCount)}
               </div>
             )}
           </div>
         </div>
       );
     }
-    
-    // For 1-2 participants, keep existing layout
-    if (participantCount === 1) {
-      return (
-        <div className="h-full w-full">
-          {allParticipants[0] && renderParticipantElement(allParticipants[0], true)}
-        </div>
-      );
-    } else { // 2 participants
-      return (
-        <div className={`${hasAgenda ? "flex flex-col" : "flex"} gap-2 h-full`}>
-          {allParticipants.map((track, index) => (
-            <div key={index} className="flex-1 h-full">
-              {renderParticipantElement(track, track === mainDisplayTrack)}
-            </div>
-          ))}
-        </div>
-      );
-    }
   };
 
   return (
-    <div className={`h-full bg-[var(--sdk-bg-primary-color)] ${className}`} style={style}>
+    <div className="h-full bg-[var(--sdk-bg-primary-color)]">
       {layoutType === "multi-participant-with-agenda" ? (
         <div className="h-full">
           <div className="flex h-[70%] mb-2">
             <div className="w-9/12 pr-2">
-              {screenShareTrack
-                ? renderParticipantElement(screenShareTrack)
-                : mainDisplayTrack && renderParticipantElement(mainDisplayTrack, true)}
+              <div className="h-full">
+                {renderParticipantGrid()}
+              </div>
             </div>
             <div className="w-3/12">{renderAgenda()}</div>
           </div>
           <div className="h-[30%]">
             <div className="flex gap-2 h-full">
-              {getBottomRowParticipants().map((track) =>
-                renderParticipantElement(track)
-              )}
-              {overflowCount > 0 && renderOverflow(overflowCount)}
+              {/* Empty bottom row for this layout type */}
             </div>
           </div>
         </div>
@@ -527,122 +579,87 @@ const renderParticipant = (
         <div className="flex h-full">
           <div className={`${hasAgenda ? "w-9/12" : "w-full"} h-full p-2`}>
             {screenShareTrack ? (
-              // UPDATED: Handle screen sharing differently on mobile
+              // Screen sharing layout
               isMobileView ? (
-                // Mobile screen sharing layout - update to NEVER exceed 3 rows
+                // Mobile screen sharing layout - reverted to original
                 <div className="flex flex-col gap-2 h-full">
                   {/* Screen share - taller row for visual priority */}
                   <div className="h-1/2">
-                    {screenShareTrack && renderParticipantElement(screenShareTrack)}
+                    {renderParticipantElement(screenShareTrack)}
                   </div>
-                  
+
                   {/* Remaining participants in lower half */}
                   <div className="h-1/2">
-                    {(() => {
-                      // Get participants that are visible when screen sharing
-                      const visibleBottomRowParticipants = getBottomRowParticipants();
-                      const remainingParticipants = visibleBottomRowParticipants.slice(0, 2);
-                      // Calculate remaining participants that should go to overflow
-                      const remainingOverflowCount = visibleBottomRowParticipants.length > 2 ? 
-                        visibleBottomRowParticipants.length - 2 + overflowCount : overflowCount;
-                      
-                      if (visibleBottomRowParticipants.length === 0) {
-                        return <div></div>;
-                      } else if (visibleBottomRowParticipants.length === 1) {
-                        return (
-                          <div className="h-full">
-                            {renderParticipantElement(visibleBottomRowParticipants[0])}
-                          </div>
-                        );
-                      } else {
-                        // Two or more participants - use 2 rows
-                        return (
-                          <div className="grid grid-rows-2 gap-2 h-full">
-                            {/* First row */}
-                            <div className="h-full w-full">
-                              {renderParticipantElement(remainingParticipants[0])}
-                            </div>
-                            
-                            {/* Second row - either second participant + overflow or just second participant */}
-                            <div className={remainingOverflowCount > 0 ? "grid grid-cols-2 gap-2 h-full" : "h-full"}>
-                              {remainingParticipants.length > 1 && (
-                                <div className="h-full w-full">
-                                  {renderParticipantElement(remainingParticipants[1])}
-                                </div>
-                              )}
-                              
-                              {/* Include overflow when needed */}
-                              {remainingOverflowCount > 0 && (
-                                <div className="h-full w-full">
-                                  {renderOverflow(remainingOverflowCount)}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      }
-                    })()}
+                    <div className="flex gap-2 h-full">
+                      {getBottomRowParticipants().slice(0, 2).map((track, index) => (
+                        <div key={index} className="flex-1 h-full">
+                          {renderParticipantElement(track)}
+                        </div>
+                      ))}
+                      {(getBottomRowParticipants().length > 2 || overflowCount > 0) && (
+                        <div className="flex-1 h-full">
+                          {renderOverflow(
+                            getBottomRowParticipants().length > 2
+                              ? getBottomRowParticipants().length - 2 + overflowCount
+                              : overflowCount
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               ) : hasAgenda ? (
                 // Desktop with agenda and screen sharing
                 <div className="flex flex-col h-full gap-2">
-                  <div className="h-[70%]">
+                  <div className="h-[70%] overflow-hidden">
                     {renderParticipantElement(screenShareTrack)}
                   </div>
-                  {/* Apply same 2-column grid logic for agenda layout */}
-                  {getBottomRowParticipants().length + overflowCount > 4 ? (
-                    <div className="grid grid-cols-2 gap-2 h-[30%]">
-                      {getBottomRowParticipants().map((track) =>
-                        renderParticipantElement(track)
-                      )}
+                  <div className="h-[30%]">
+                    <div className="flex gap-2 h-full">
+                      {getBottomRowParticipants().map((track, index) => (
+                        <div key={index} className="flex-1 h-full overflow-hidden">
+                          {renderParticipantElement(track)}
+                        </div>
+                      ))}
                       {overflowCount > 0 && (
-                        <div className="col-span-1">
+                        <div className="flex-1 h-full overflow-hidden">
                           {renderOverflow(overflowCount)}
                         </div>
                       )}
                     </div>
-                  ) : (
-                    <div className="flex gap-2 h-[30%]">
-                      {getBottomRowParticipants().map((track) =>
-                        renderParticipantElement(track)
-                      )}
-                      {overflowCount > 0 && renderOverflow(overflowCount)}
-                    </div>
-                  )}
+                  </div>
                 </div>
               ) : (
                 // Desktop without agenda, with screen sharing
                 <div className="flex h-full gap-2">
-                  <div className="w-8/12 h-full">
+                  <div className="w-8/12 h-full overflow-hidden">
                     {renderParticipantElement(screenShareTrack)}
                   </div>
                   <div className="w-4/12 h-full">
-                    {/* More than 4 participants - use a 2-column grid layout */}
-                    {getBottomRowParticipants().length + overflowCount > 4 ? (
+                    {getBottomRowParticipants().length > 4 ? (
+                      // More than 4 participants - use 2 column grid
                       <div className="grid grid-cols-2 gap-2 h-full">
                         {getBottomRowParticipants().map((track, index) => (
-                          <div key={track.participant?.identity || index} 
-                               className="h-full w-full">
+                          <div key={index} className="relative overflow-hidden">
                             {renderParticipantElement(track)}
                           </div>
                         ))}
                         {overflowCount > 0 && (
-                          <div className="h-full w-full">
+                          <div className="relative overflow-hidden">
                             {renderOverflow(overflowCount)}
                           </div>
                         )}
                       </div>
                     ) : (
+                      // 4 or fewer participants - use single column
                       <div className="flex flex-col gap-2 h-full">
                         {getBottomRowParticipants().map((track, index) => (
-                          <div key={track.participant?.identity || index} 
-                               className="flex-1">
+                          <div key={index} className="flex-1 overflow-hidden">
                             {renderParticipantElement(track)}
                           </div>
                         ))}
                         {overflowCount > 0 && (
-                          <div className="flex-1">
+                          <div className="flex-1 overflow-hidden">
                             {renderOverflow(overflowCount)}
                           </div>
                         )}
@@ -656,7 +673,7 @@ const renderParticipant = (
               renderParticipantGrid()
             )}
           </div>
-          {hasAgenda && (!isMobileView && cameraTracks.length <= 2) && (
+          {hasAgenda && !isMobileView && cameraTracks.length <= 2 && (
             <div className="w-3/12 pl-2 h-full">{renderAgenda()}</div>
           )}
         </div>
@@ -664,4 +681,3 @@ const renderParticipant = (
     </div>
   );
 }
-

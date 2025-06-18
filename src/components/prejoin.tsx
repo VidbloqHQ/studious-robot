@@ -8,7 +8,7 @@ import { usePrejoin, useRequirePublicKey } from '../hooks/index';
  */
 const PrejoinComponent: React.FC = () => {
   const { publicKey } = useRequirePublicKey();
-  
+  const avatarUrl = "https://res.cloudinary.com/adaeze/image/upload/v1746917882/ihmztupdw0mgu6ma7v9s.png"
 
   const {
     nickname,
@@ -22,7 +22,8 @@ const PrejoinComponent: React.FC = () => {
     error,
     previewTracks
   } = usePrejoin({ 
-    publicKey
+    publicKey,
+    avatarUrl
   });
 
   return (
