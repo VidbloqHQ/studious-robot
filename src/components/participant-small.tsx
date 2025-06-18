@@ -8,7 +8,7 @@ type ParticipantSmallProps = {
 };
 
 const ParticipantSmall = ({ participant, onSendClick }: ParticipantSmallProps) => {
-  const { userName } = participant;
+  const { userName, avatarUrl } = participant;
   const [showDropdown, setShowDropdown] = useState<boolean>(false);
   
   const handleClick = () => {
@@ -36,9 +36,7 @@ const ParticipantSmall = ({ participant, onSendClick }: ParticipantSmallProps) =
         onClick={handleClick}
       >
         <img
-          src={
-            "https://res.cloudinary.com/adaeze/image/upload/v1745404837/vaq22f4hotztogwlnhzq.png"
-          }
+          src={avatarUrl}
           className="h-[48px] w-[48px]"
           alt={`${userName}'s avatar`}
         />
