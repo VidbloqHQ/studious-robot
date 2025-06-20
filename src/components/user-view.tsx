@@ -1,40 +1,31 @@
 import { useState, useEffect, useRef } from "react";
-import { useStreamContext, useTenantContext } from "../hooks";
-import {
-  ParticipantContext,
-  useLocalParticipant,
-} from "@livekit/components-react";
-// import Meeting from "./meeting";
-import Meeting from "./meeting-classic";
-import Livestream from "./livestream";
-// import Prejoin from "./prejoin";
-import CallControls from "./call-controls";
-import RequestCard from "./request-card";
+import { useStreamContext } from "../hooks";
 import { GuestRequest } from "../types";
-import { Icon } from "./icons";
-
+import CallControls from "./call-controls";
+// import { Icon } from "./icons";
+import Livestream from "./livestream";
+import Meeting from "./meeting-classic";
+import RaisedHandCard from "./raised-hand";
+import RequestCard from "./request-card";
+import Prejoin from "./prejoin";
+import { WebSocketDebugger } from "./WebSocketDebugger";
 
 const UserView = () => {
-  const p = useLocalParticipant();
   const {
     streamMetadata,
-    // token,
+    token,
     guestRequests,
     userType,
     websocket,
     roomName,
+    raisedHands,
   } = useStreamContext();
+  // const { tenant } = useTenantContext();
 
-  const { tenant } = useTenantContext();
-
-  // Maintain local state for guest requests
+  // const [isTyping, setIsTyping] = useState<boolean>(false);
   const [localGuestRequests, setLocalGuestRequests] = useState<GuestRequest[]>(
     []
   );
-  const [isTyping, setIsTyping] = useState<boolean>(false);
-  // const [streamTitle, setStreamTitle] = useState<string>()
-
-  // Track processed request IDs to avoid re-adding removed requests
   const processedRequestIds = useRef(new Set<string>());
 
   // Track if component is mounted
@@ -47,10 +38,8 @@ const UserView = () => {
       isMounted.current = false;
     };
   }, []);
-
-  // Update local state when global state changes
   useEffect(() => {
-    console.log("UserView received guest requests:", guestRequests);
+    // console.log("UserView received guest requests:", guestRequests);
 
     if (Array.isArray(guestRequests)) {
       // Filter out any requests that have been processed locally
@@ -63,28 +52,13 @@ const UserView = () => {
       }
     }
   }, [guestRequests]);
-
-  // Handle manual removal of a request
-  const handleRemoveRequest = (participantId: string) => {
-    console.log(`Locally removing request for ${participantId}`);
-
-    // Add to processed requests to prevent it from reappearing
-    processedRequestIds.current.add(participantId);
-
-    // Update local state
-    setLocalGuestRequests((prev) =>
-      prev.filter((req) => req.participantId !== participantId)
-    );
-  };
-
-  // Set up WebSocket listener for guest request updates
   useEffect(() => {
     if (!websocket || !roomName) return;
 
     // When a guest request update is received, ensure processed requests
     // are still filtered out
     const handleGuestRequestsUpdate = (requests: GuestRequest[]) => {
-      console.log("WebSocket guest requests update received:", requests);
+      // console.log("WebSocket guest requests update received:", requests);
 
       if (!Array.isArray(requests) || !isMounted.current) return;
 
@@ -101,7 +75,7 @@ const UserView = () => {
       participantId: string;
       roomName: string;
     }) => {
-      console.log("WebSocket invite guest event received:", data);
+      // console.log("WebSocket invite guest event received:", data);
 
       if (data.participantId && data.roomName === roomName) {
         // Add to processed requests
@@ -131,78 +105,31 @@ const UserView = () => {
     };
   }, [websocket, roomName]);
 
-  // if (!token) {
-  //   return <Prejoin />;
-  // }
+  const handleRemoveRequest = (participantId: string) => {
+    // console.log(`Locally removing request for ${participantId}`);
 
+    // Add to processed requests to prevent it from reappearing
+    processedRequestIds.current.add(participantId);
+
+    // Update local state
+    setLocalGuestRequests((prev) =>
+      prev.filter((req) => req.participantId !== participantId)
+    );
+  };
+   if (!token) {
+    return <Prejoin />;
+  }
   return (
     <>
-      <ParticipantContext.Provider value={p.localParticipant}>
-        <div className="flex flex-row items-center my-2 justify-between w-[96%] lg:w-[82%] mx-auto">
-          <img
-            src={
-              tenant?.logo ??
-              "https://res.cloudinary.com/adaeze/image/upload/v1746647035/a49xigo2kgijd1dugdix.png"
-            }
-            className="w-[85px] lg:w-[180px]"
-          />
-          <div className="flex flex-row items-center border bg-[var(--sdk-bg-secondary-color)] rounded-lg gap-x-1 lg:w-[26%] justify-between">
-            <div className="flex flex-row items-center gap-x-1.5 w-[80%]">
-              <div className="bg-[var(--sdk-bg-primary-color)] rounded-lg p-1.5 lg:p-1">
-                <Icon
-                  name="signal"
-                  className="text-primary-light"
-                  size={{
-                    mobile: 24,
-                    desktop: 34,
-                  }}
-                />
-              </div>
-
-              <input
-                className="focus:outline-none bg-transparent w-full"
-                placeholder="Enter Stream Title"
-                onChange={() => setIsTyping(true)}
-              />
-            </div>
-
-            <div className="bg-[var(--sdk-bg-primary-color)] rounded-r-lg p-2.5">
-              {isTyping ? (
-                <button className="text-sm text-primary font-semibold">
-                  Save
-                </button>
-              ) : (
-                <Icon
-                  name="edit"
-                  className="text-primary"
-                  size={{
-                    mobile: 16,
-                    desktop: 18,
-                  }}
-                />
-              )}
-            </div>
-          </div>
-          {/* <div className="flex flex-row items-center border">
-            <span>200k Tipped</span>
-            <div className="border">
-              <Icon name="moneyTransfer" />
-            </div>
-          </div> */}
-        </div>
-        {streamMetadata?.streamSessionType === "meeting" ? (
-          <Meeting />
-        ) : (
-          <Livestream />
-        )}
-        {/* <ReactionComponent /> */}
-        {/* Call controls */}
-        <div className="w-[90%] lg:w-[80%] mx-auto">
-          <CallControls />
-        </div>
-      </ParticipantContext.Provider>
-
-      {/* Only show for hosts */}
+      {streamMetadata?.streamSessionType === "meeting" ? (
+        <Meeting />
+      ) : (
+        <Livestream />
+      )}
+      <div className="w-[90%] lg:w-[80%] mx-auto">
+        <CallControls />
+      </div>
+      <WebSocketDebugger />
       {userType === "host" && (
         <div className="absolute right-10 top-20 bg-red-300 rounded">
           {localGuestRequests.length > 0 &&
@@ -215,6 +142,20 @@ const UserView = () => {
             ))}
         </div>
       )}
+      {streamMetadata.streamSessionType === "meeting" &&
+        raisedHands.length > 0 && (
+          <div className="absolute right-10 top-20">
+            <div className="mb-2 text-sm text-gray-600 font-medium">
+              Raised Hands ({raisedHands.length})
+            </div>
+            {raisedHands.map((raisedHand, i) => (
+              <RaisedHandCard
+                raisedHand={raisedHand}
+                key={raisedHand.participantId || i}
+              />
+            ))}
+          </div>
+        )}
     </>
   );
 };
