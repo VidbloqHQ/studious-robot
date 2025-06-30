@@ -61,38 +61,9 @@ export const useStreamAddons = () => {
     }
   };
 
-  // Quiz-specific functions
-  // const startQuiz = <T>(roomName: string, quiz: T) => {
-  //   if (websocket && websocket.isConnected) {
-  //     websocket.sendMessage('startQuiz', { roomName, quiz });
-  //     startAddon('Quiz', quiz);
-  //   }
-  // };
-
-  // const endQuiz = <T>(roomName: string, results: T) => {
-  //   if (websocket && websocket.isConnected) {
-  //     websocket.sendMessage('endQuiz', { roomName, results });
-  //     stopAddon('Quiz');
-  //   }
-  // };
-
-  // const submitQuizAnswer = (roomName: string, questionId: string, participantId: string, answer: string) => {
-  //   if (websocket && websocket.isConnected) {
-  //     websocket.sendMessage('submitQuizAnswer', {
-  //       roomName,
-  //       questionId,
-  //       participantId,
-  //       answer
-  //     });
-  //   }
-  // };
-
   return { 
     activeAddons, 
     startAddon,
     stopAddon,
-    // startQuiz,
-    // endQuiz,
-    // submitQuizAnswer
   };
 };

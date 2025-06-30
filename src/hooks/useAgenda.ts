@@ -65,7 +65,7 @@ export const useCreateAgenda = (): UseCreateAgendaReturn => {
     try {
       // Use the API client to make the POST request to the /stream/:streamId/agenda endpoint
       const createdAgendas = await apiClient.post<Agenda[]>(
-        `/stream/${data.streamId}/agenda`,
+        `/agenda/${data.streamId}`,
         {
           agendas: data.agendas,
           wallet: data.wallet,
@@ -130,7 +130,7 @@ export const useGetStreamAgenda = (): UseGetStreamAgendaReturn => {
     try {
       // Use the API client to make the GET request to the /stream/:streamId/agenda endpoint
       const fetchedAgendas = await apiClient.get<Agenda[]>(
-        `/stream/${streamId}/agenda`
+        `/agenda/${streamId}`
       );
 
       setAgendas(fetchedAgendas);

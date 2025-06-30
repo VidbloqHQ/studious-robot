@@ -1,9 +1,11 @@
 import React from "react";
-import { LocalParticipant, RemoteParticipant } from "livekit-client";
+// import { LocalParticipant, RemoteParticipant } from "livekit-client";
 import ParticipantControls from "./participant-controls";
+import { EnhancedSDKParticipant, SDKParticipant } from "../types";
 
 export type ParticipantViewProps = {
-  participant: LocalParticipant | RemoteParticipant;
+  // participant: LocalParticipant | RemoteParticipant;
+  participant: SDKParticipant | EnhancedSDKParticipant;
   className?: string;
   style?: React.CSSProperties;
   showUserInfo?: boolean;
@@ -13,24 +15,24 @@ export type ParticipantViewProps = {
   isMicrophoneEnabled?: boolean;
   isCameraEnabled?: boolean;
   showControls?: boolean;
-  onGiftClick?: (participant: LocalParticipant | RemoteParticipant) => void;
+  onGiftClick?: (participant: SDKParticipant) => void;
   components?: {
     AvatarComponent?: React.FC<{
-      participant: LocalParticipant | RemoteParticipant;
+      participant: SDKParticipant;
       avatarUrl: string;
       userName: string;
     }>;
     UserInfoComponent?: React.FC<{
-      participant: LocalParticipant | RemoteParticipant;
+      participant: SDKParticipant;
       avatarUrl: string;
       userName: string;
     }>;
     BackgroundComponent?: React.FC<{
-      participant: LocalParticipant | RemoteParticipant;
+      participant: SDKParticipant;
       avatarUrl: string;
     }>;
     ControlsComponent?: React.FC<{
-      participant: LocalParticipant | RemoteParticipant;
+      participant: SDKParticipant;
       isLocal: boolean;
       isMicrophoneEnabled: boolean;
       isCameraEnabled: boolean;

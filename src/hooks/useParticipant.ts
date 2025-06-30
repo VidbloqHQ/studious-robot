@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Participant } from "../types/index";
 import { useStreamContext } from "./useStreamContext";
 import { useTenantContext } from "./useTenantContext";
@@ -99,11 +99,13 @@ export const useDownloadParticipants = () => {
   return { downloadParticipants, isDownloading, error };
 };
 
+
 interface NotificationOptions {
   showJoinNotifications?: boolean;
   showLeaveNotifications?: boolean;
   joinNotificationDuration?: number;
   leaveNotificationDuration?: number;
+  batchDelay?: number; // New option for batching
 }
 
 export const useParticipantNotifications = (options: NotificationOptions = {}) => {
@@ -112,6 +114,7 @@ export const useParticipantNotifications = (options: NotificationOptions = {}) =
     showLeaveNotifications = true,
     joinNotificationDuration = 4000,
     leaveNotificationDuration = 3000,
+    batchDelay = 500, // Batch notifications within 500ms
   } = options;
 
   const { participants, userType } = useStreamContext();
@@ -121,7 +124,90 @@ export const useParticipantNotifications = (options: NotificationOptions = {}) =
   const participantsMapRef = useRef<Map<string, Participant>>(new Map());
   const lastParticipantIdsRef = useRef<Set<string>>(new Set());
   const isFirstRunRef = useRef(true);
+  
+  // Batching refs - now storing participant data
+  const pendingJoinsRef = useRef<Map<string, Participant>>(new Map());
+  const pendingLeavesRef = useRef<Map<string, Participant>>(new Map());
+  const batchTimerRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Process batched notifications
+  const processBatchedNotifications = useCallback(() => {
+    // Process joins
+    if (pendingJoinsRef.current.size > 0 && showJoinNotifications) {
+      const joinedParticipants = Array.from(pendingJoinsRef.current.values());
+      
+      if (joinedParticipants.length > 0) {
+        let message: string;
+        const joinedNames = joinedParticipants.map(p => 
+          p.userName || `${p.walletAddress?.slice(0, 6)}...` || 'Anonymous'
+        );
+        
+        if (joinedNames.length === 1) {
+          const participant = joinedParticipants[0];
+          message = userType === 'host'
+            ? `${joinedNames[0]} joined the ${participant.userType === 'guest' ? 'audience' : 'call'}`
+            : `${joinedNames[0]} joined`;
+        } else if (joinedNames.length === 2) {
+          message = `${joinedNames[0]} and ${joinedNames[1]} joined`;
+        } else {
+          message = `${joinedNames.slice(0, -1).join(', ')} and ${joinedNames[joinedNames.length - 1]} joined`;
+        }
+
+        addNotification({
+          type: 'info',
+          message,
+          duration: joinNotificationDuration,
+        });
+      }
+      
+      pendingJoinsRef.current.clear();
+    }
+
+    // Process leaves
+    if (pendingLeavesRef.current.size > 0 && showLeaveNotifications) {
+      const leftParticipants = Array.from(pendingLeavesRef.current.values());
+      
+      if (leftParticipants.length > 0) {
+        let message: string;
+        const leftNames = leftParticipants.map(p => 
+          p.userName || `${p.walletAddress?.slice(0, 6)}...` || 'User'
+        );
+        
+        if (leftNames.length === 1) {
+          const participant = leftParticipants[0];
+          message = userType === 'host'
+            ? `${leftNames[0]} left the ${participant.userType === 'guest' ? 'audience' : 'call'}`
+            : `${leftNames[0]} left`;
+        } else if (leftNames.length === 2) {
+          message = `${leftNames[0]} and ${leftNames[1]} left`;
+        } else {
+          message = `${leftNames.slice(0, -1).join(', ')} and ${leftNames[leftNames.length - 1]} left`;
+        }
+
+        addNotification({
+          type: 'info',
+          message,
+          duration: leaveNotificationDuration,
+        });
+      }
+      
+      pendingLeavesRef.current.clear();
+    }
+
+    batchTimerRef.current = null;
+  }, [userType, showJoinNotifications, showLeaveNotifications, 
+      joinNotificationDuration, leaveNotificationDuration, addNotification]);
+
+  // Schedule batch processing
+  const scheduleBatch = useCallback(() => {
+    if (batchTimerRef.current) {
+      clearTimeout(batchTimerRef.current);
+    }
+    
+    batchTimerRef.current = setTimeout(() => {
+      processBatchedNotifications();
+    }, batchDelay);
+  }, [batchDelay, processBatchedNotifications]);
 
   // Update participants map and detect changes
   useEffect(() => {
@@ -145,24 +231,9 @@ export const useParticipantNotifications = (options: NotificationOptions = {}) =
     currentParticipantIds.forEach(id => {
       if (!lastParticipantIdsRef.current.has(id)) {
         const participant = newParticipantsMap.get(id);
-        
-        if (participant && showJoinNotifications) {
-          const displayName = participant.userName || 
-            `${participant.walletAddress?.slice(0, 6)}...` || 
-            'Anonymous';
-
-          const message = userType === 'host'
-            ? `${displayName} joined the ${participant.userType === 'guest' ? 'audience' : 'call'}`
-            : `${displayName} joined`;
-          
-          // Add a small delay to ensure the UI is ready
-          setTimeout(() => {
-            addNotification({
-              type: 'info',
-              message,
-              duration: joinNotificationDuration,
-            });
-          }, 100);
+        if (participant) {
+          pendingJoinsRef.current.set(id, participant);
+          scheduleBatch();
         }
       }
     });
@@ -170,25 +241,11 @@ export const useParticipantNotifications = (options: NotificationOptions = {}) =
     // Detect removed participants (left)
     lastParticipantIdsRef.current.forEach(id => {
       if (!currentParticipantIds.has(id)) {
+        // Get participant data from our stored map
         const participant = participantsMapRef.current.get(id);
-        
-        if (showLeaveNotifications) {
-          const displayName = participant?.userName || 
-            `${participant?.walletAddress?.slice(0, 6)}...` || 
-            'User';
-
-          const message = userType === 'host'
-            ? `${displayName} left the ${participant?.userType === 'guest' ? 'audience' : 'call'}`
-            : `${displayName} left`;
-
-          // Add a small delay to ensure the UI is ready
-          setTimeout(() => {
-            addNotification({
-              type: 'info',
-              message,
-              duration: leaveNotificationDuration,
-            });
-          }, 100);
+        if (participant) {
+          pendingLeavesRef.current.set(id, participant);
+          scheduleBatch();
         }
       }
     });
@@ -197,8 +254,18 @@ export const useParticipantNotifications = (options: NotificationOptions = {}) =
     lastParticipantIdsRef.current = currentParticipantIds;
     participantsMapRef.current = newParticipantsMap;
 
-  }, [participants, userType, showJoinNotifications, showLeaveNotifications, 
-      joinNotificationDuration, leaveNotificationDuration, addNotification]);
+  }, [participants, scheduleBatch]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (batchTimerRef.current) {
+        clearTimeout(batchTimerRef.current);
+        // Process any pending notifications before cleanup
+        processBatchedNotifications();
+      }
+    };
+  }, [processBatchedNotifications]);
 
   return {
     participantCount: participants.length,

@@ -1,16 +1,13 @@
-import React, { useState, useEffect } from "react";
-import { LocalParticipant, RemoteParticipant } from "livekit-client";
+import React, { useState } from "react";
 import { Icon } from "./icons";
-import {
-  checkParticipantMicEnabled,
-  checkParticipantCameraEnabled,
-} from "../utils/index";
+import { getParticipantMetadata } from "../utils/index";
 import { useParticipantList, useNotification } from "../hooks/index";
-import { Participant } from "../types/index";
+import { useParticipantTrackStates } from "../hooks/useParticipantTrackStates";
+import { Participant, SDKParticipant, EnhancedSDKParticipant } from "../types/index";
 import { SendModal } from "./modals/index";
 
 export type ParticipantControlsProps = {
-  participant: LocalParticipant | RemoteParticipant;
+  participant: SDKParticipant | EnhancedSDKParticipant;
   isLocal?: boolean;
   isMicrophoneEnabled?: boolean;
   isCameraEnabled?: boolean;
@@ -18,12 +15,12 @@ export type ParticipantControlsProps = {
   showAudio?: boolean;
   showVideo?: boolean;
   showGift?: boolean;
-  onGiftClick?: (participant: LocalParticipant | RemoteParticipant) => void;
+  onGiftClick?: (participant: SDKParticipant) => void;
 };
 
 /**
  * ParticipantControls component - displays control icons on participant tiles
- * Shows audio, video status and gift button
+ * Shows audio, video status and gift button with real-time synchronization
  */
 const ParticipantControls: React.FC<ParticipantControlsProps> = ({
   participant,
@@ -36,13 +33,17 @@ const ParticipantControls: React.FC<ParticipantControlsProps> = ({
   showGift = true,
   onGiftClick,
 }) => {
-  // Track local state
-  const [localMicEnabled, setLocalMicEnabled] = useState(
-    isLocal ? checkParticipantMicEnabled(participant) : isMicrophoneEnabled
-  );
-  const [localCameraEnabled, setLocalCameraEnabled] = useState(
-    isLocal ? checkParticipantCameraEnabled(participant) : isCameraEnabled
-  );
+  // Use the hook to track real-time track states
+  const trackStates = useParticipantTrackStates(participant, isLocal);
+
+  // Use track states from hook if we have LiveKit reference, otherwise fall back to props
+  const micEnabled = trackStates.hasLivekitReference 
+    ? trackStates.micEnabled 
+    : isMicrophoneEnabled;
+    
+  const cameraEnabled = trackStates.hasLivekitReference 
+    ? trackStates.cameraEnabled 
+    : isCameraEnabled;
 
   // Add states for the SendModal
   const [showSendModal, setShowSendModal] = useState<boolean>(false);
@@ -55,48 +56,15 @@ const ParticipantControls: React.FC<ParticipantControlsProps> = ({
   // Optional: Get notification service if you want to show errors
   const { addNotification } = useNotification();
 
-  // For local participants, monitor track state changes
-  useEffect(() => {
-    if (!isLocal) return;
-
-    const handleTrackMuted = () => {
-      setLocalMicEnabled(checkParticipantMicEnabled(participant));
-      setLocalCameraEnabled(checkParticipantCameraEnabled(participant));
-    };
-
-    const handleTrackUnmuted = () => {
-      setLocalMicEnabled(checkParticipantMicEnabled(participant));
-      setLocalCameraEnabled(checkParticipantCameraEnabled(participant));
-    };
-
-    participant.on("trackMuted", handleTrackMuted);
-    participant.on("trackUnmuted", handleTrackUnmuted);
-
-    return () => {
-      participant.off("trackMuted", handleTrackMuted);
-      participant.off("trackUnmuted", handleTrackUnmuted);
-    };
-  }, [isLocal, participant]);
-
-  // Update from props for remote participants
-  useEffect(() => {
-    if (!isLocal) {
-      setLocalMicEnabled(isMicrophoneEnabled);
-      setLocalCameraEnabled(isCameraEnabled);
-    }
-  }, [isLocal, isMicrophoneEnabled, isCameraEnabled]);
-
   // Handle gift click with the hybrid approach
   const handleGiftClick = () => {
     if (onGiftClick) {
       onGiftClick(participant);
     }
 
-    // Try method 1: Extract from metadata
+    // Try method 1: Extract from metadata using utility function
     try {
-      const metadata = participant.metadata
-        ? JSON.parse(participant.metadata)
-        : {};
+      const metadata = getParticipantMetadata(participant);
 
       if (metadata.walletAddress) {
         const participantWithWallet = {
@@ -104,6 +72,7 @@ const ParticipantControls: React.FC<ParticipantControlsProps> = ({
           userName: metadata.userName || participant.identity,
           walletAddress: metadata.walletAddress,
           userType: metadata.userType || "guest",
+          avatarUrl: metadata.avatarUrl || "",
         };
 
         setSelectedParticipant(participantWithWallet as Participant);
@@ -139,7 +108,7 @@ const ParticipantControls: React.FC<ParticipantControlsProps> = ({
     }
   };
 
-   const shouldShowGift = showGift && !isLocal;
+  const shouldShowGift = showGift && !isLocal;
 
   // Handle closing the send modal
   const handleCloseSendModal = (closed: boolean) => {
@@ -165,11 +134,11 @@ const ParticipantControls: React.FC<ParticipantControlsProps> = ({
           {showAudio && (
             <div
               className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                localMicEnabled ? "bg-primary" : "bg-gray-500 bg-opacity-60"
+                micEnabled ? "bg-primary" : "bg-gray-500 bg-opacity-60"
               }`}
             >
               <Icon
-                name={localMicEnabled ? "audio" : "audioOff"}
+                name={micEnabled ? "audio" : "audioOff"}
                 className="text-white"
                 size={16}
               />
@@ -180,11 +149,11 @@ const ParticipantControls: React.FC<ParticipantControlsProps> = ({
           {showVideo && (
             <div
               className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                localCameraEnabled ? "bg-primary" : "bg-gray-500 bg-opacity-60"
+                cameraEnabled ? "bg-primary" : "bg-gray-500 bg-opacity-60"
               }`}
             >
               <Icon
-                name={localCameraEnabled ? "video" : "videoOff"}
+                name={cameraEnabled ? "video" : "videoOff"}
                 className="text-white"
                 size={16}
               />
@@ -192,7 +161,6 @@ const ParticipantControls: React.FC<ParticipantControlsProps> = ({
           )}
         </div>
       </div>
-      {/* </div> */}
 
       {/* Render SendModal when showSendModal is true and selectedParticipant exists */}
       {showSendModal && selectedParticipant && (
