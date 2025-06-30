@@ -126,14 +126,11 @@ const Reactions = ({ showReactions }: ReactionProps) => {
     
     // Prevent rapid clicks (debounce)
     if (now - lastClickTime.current < 300) {
-      console.log("Ignoring rapid click");
       return;
     }
     
     lastClickTime.current = now;
     
-    // Just send the reaction through WebSocket
-    console.log(`Sending reaction: ${emoji}`);
     sendReaction(emoji, sender);
   }, [sender, sendReaction]);
 

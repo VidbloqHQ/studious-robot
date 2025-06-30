@@ -116,7 +116,7 @@ const RequestCard = ({ request, onRemove }: RequestCardProps) => {
   if (userType !== "host") return null;
   
   return (
-    <div className="bg-green-800 rounded-lg shadow-lg p-4 mb-2 w-60">
+    <div className="bg-white border rounded-lg shadow-lg p-4 mb-2 w-60">
       <h3 className="text-md font-semibold">{name || participantId}</h3>
       <p className="text-xs text-gray-500 mb-4">Wants to speak</p>
       

@@ -30,7 +30,6 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({
       try {
         const key = new PublicKey(savedKey);
         if (PublicKey.isOnCurve(key.toBytes())) {
-          console.log("PublicKey initialized:", key.toBase58());
           setPublicKey(key);
 
           // If there's a registered signer for this wallet type, use it

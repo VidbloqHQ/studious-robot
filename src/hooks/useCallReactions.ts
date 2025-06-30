@@ -32,7 +32,6 @@ export const useCallReactions = () => {
   // Ensure we're properly joined to the room
   useEffect(() => {
     if (websocket?.isConnected && roomName && identity && !joinedRoom.current) {
-      // console.log(`Ensuring participant ${identity} is joined to room ${roomName}`);
       websocket.joinRoom(roomName, identity);
       joinedRoom.current = true;
     }
@@ -42,14 +41,12 @@ export const useCallReactions = () => {
   useEffect(() => {
     if (!websocket || !roomName || eventListenerRegistered.current) return;
 
-    console.log(`Setting up reaction event listener for room ${roomName}`);
     eventListenerRegistered.current = true;
 
     // Handle incoming reactions
     const handleReceiveReaction = (data: ReactionData) => {
       // Only process reactions for the current room
       if (data.roomName && data.roomName !== roomName) {
-        // console.log(`Ignoring reaction for different room: ${data.roomName}`);
         return;
       }
       
@@ -61,20 +58,17 @@ export const useCallReactions = () => {
         roomName: data.roomName || roomName
       };
       
-      // console.log(`Received reaction: ${reactionWithMeta.reaction} from ${reactionWithMeta.sender} in room ${reactionWithMeta.roomName}`);
       
       // Add the new reaction to the array
       setReactions((prev) => {
         // Check if this exact reaction already exists (prevent duplicates)
         const exists = prev.some(r => r.id === reactionWithMeta.id);
         if (exists) {
-          // console.log(`Duplicate reaction detected, skipping: ${reactionWithMeta.id}`);
           return prev;
         }
         
         // Add new reaction and limit array size
         const updated = [...prev, reactionWithMeta];
-        // console.log(`Added reaction to array. Total reactions: ${updated.length}`);
         return updated.slice(-50); // Keep only last 50 reactions
       });
 
@@ -90,7 +84,6 @@ export const useCallReactions = () => {
       const timeout = setTimeout(() => {
         setReactions((prev) => {
           const filtered = prev.filter((r) => r.id !== reactionWithMeta.id);
-          // console.log(`Removing reaction ${reactionWithMeta.id}, remaining: ${filtered.length}`);
           return filtered;
         });
         reactionTimeouts.current.delete(timeoutKey);
@@ -101,18 +94,15 @@ export const useCallReactions = () => {
 
     // Handle connection events
     const handleConnect = () => {
-      // console.log("WebSocket connected - re-registering for reactions");
       joinedRoom.current = false; // Reset join status to rejoin
       
       // Resend any pending reactions
       pendingReactions.current.forEach((pending) => {
-        // console.log(`Resending pending reaction: ${pending.data.reaction}`);
         sendReactionInternal(pending.data);
       });
     };
 
     const handleDisconnect = () => {
-      // console.log("WebSocket disconnected - reactions may be delayed");
       joinedRoom.current = false;
     };
 
@@ -124,11 +114,9 @@ export const useCallReactions = () => {
     // Also listen for WebSocket reconnection events
     window.addEventListener("connect", handleConnect);
 
-    // console.log("Reaction event listeners registered successfully");
 
     // Clean up event listeners and timeouts on unmount
     return () => {
-      // console.log("Cleaning up reaction event listeners");
       if (websocket) {
         websocket.removeEventListener("receiveReaction", handleReceiveReaction);
         websocket.removeEventListener("connect", handleConnect);
@@ -172,7 +160,6 @@ export const useCallReactions = () => {
       
       if (!pending || pending.retryCount < 3) {
         const retryCount = pending ? pending.retryCount + 1 : 1;
-       // console.log(`Scheduling retry ${retryCount}/3 for reaction: ${reactionData.reaction}`);
         
         const timeoutId = setTimeout(() => {
           sendReactionInternal(reactionData);
@@ -188,7 +175,6 @@ export const useCallReactions = () => {
         pendingReactions.current.delete(pendingId);
       }
     } else {
-      // console.log(`Reaction sent successfully: ${reactionData.reaction}`);
       // Remove from pending if it was there
       const pending = pendingReactions.current.get(reactionData.id!);
       if (pending) {
@@ -216,7 +202,6 @@ export const useCallReactions = () => {
         roomName
       };
 
-      // console.log(`Attempting to send reaction: ${reaction} from ${sender} in room ${roomName}`);
 
       // Check connection state
       if (!websocket.isConnected) {
@@ -242,7 +227,6 @@ export const useCallReactions = () => {
 
       // Ensure we're in the room
       if (!joinedRoom.current && identity) {
-        // console.log("Rejoining room before sending reaction");
         websocket.joinRoom(roomName, identity);
         joinedRoom.current = true;
         
@@ -262,7 +246,6 @@ export const useCallReactions = () => {
   useEffect(() => {
     const interval = setInterval(() => {
       if (websocket?.isConnected && !eventListenerRegistered.current) {
-        // console.log("WebSocket connected but listeners not registered, re-registering");
         eventListenerRegistered.current = false; // Force re-registration
       }
     }, 5000);

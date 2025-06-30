@@ -7,4 +7,7 @@ export { default as BaseCallControls } from "./base-call-controls";
 export { default as UserView } from "./user-view";
 export { default as Prejoin } from "./prejoin";
 export { default as CallControls } from "./call-controls";
-// export { default as StreamManager } from "./stream-manager"
+export { default as ParticipantView } from "./participant";
+export { default as ParticipantControls } from "./participant-controls";
+export { default as ReactionsBar } from "./reactions"
+export * from "./track-controls"

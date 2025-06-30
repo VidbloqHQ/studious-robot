@@ -1,9 +1,3 @@
-import { Buffer } from 'buffer';
-
-// Make Buffer available globally for browser environments
-if (typeof window !== 'undefined') {
-  window.Buffer = window.Buffer || Buffer;
-}
 import "./index.css";
 import {
   StreamRoom,
@@ -19,14 +13,25 @@ import {
   RecordControl,
   MediaControls,
   StreamView,
-  // StreamManager
+  ParticipantView,
+  ParticipantControls,
+  AudioTrack,
+  VideoTrack,
+  ReactionsBar,
 } from "./components/index";
-// export * from "./components";
 
+import {
+  checkParticipantMicEnabled,
+  checkIfLocalParticipant,
+  getAvatarUrl,
+  getParticipantMetadata,
+  getUserName,
+  getUserType,
+} from "./utils/index";
 
 import {
   useTransaction,
-  // useVidbloqProgram,
+  useVidbloqProgram,
   useParticipantList,
   useStreamContext,
   useWalletContext,
@@ -37,7 +42,31 @@ import {
   useWebSocket,
   useLivestream,
   useMeeting,
+  useNotification,
+  useStreamAddons,
+  useCallReactions,
+  useCreateAgenda,
+  useHandleStreamDisconnect,
+  useGetStreamAgenda,
+  useDeleteAgenda,
+  useUpdateStreamAgenda,
+  useGetQuizQuestions,
+  useGetQuizResults,
+  useGetUserQuizAnswers,
+  useSubmitQuizAnswers,
 } from "./hooks/index";
+
+import {
+  SDKTrackSource,
+  SDKTrackKind,
+  SDKParticipant,
+  SDKTrackReference,
+  SDKTrackPublication,
+  SDKRoom,
+  ParticipantMetadata,
+  Agenda,
+  AddonType,
+} from "./types";
 
 export {
   StreamRoom,
@@ -52,9 +81,10 @@ export {
   RecordControl,
   MediaControls,
   CallControls,
+  ReactionsBar,
   StreamView,
   useTransaction,
-  // useVidbloqProgram,
+  useVidbloqProgram,
   useParticipantList,
   useStreamContext,
   useWalletContext,
@@ -65,5 +95,38 @@ export {
   useWebSocket,
   useLivestream,
   useMeeting,
-  // StreamManager
+  useNotification,
+  useStreamAddons,
+  useCallReactions,
+  useCreateAgenda,
+  useHandleStreamDisconnect,
+  useGetUserQuizAnswers,
+  useSubmitQuizAnswers,
+  useGetStreamAgenda,
+  useDeleteAgenda,
+  useUpdateStreamAgenda,
+  useGetQuizQuestions,
+  useGetQuizResults,
+  checkParticipantMicEnabled,
+  checkIfLocalParticipant,
+  ParticipantView,
+  ParticipantControls,
+  SDKTrackSource,
+  SDKTrackKind,
+  VideoTrack,
+  AudioTrack,
+  getUserType,
+  getUserName,
+  getAvatarUrl,
+  getParticipantMetadata,
+};
+
+export type {
+  SDKParticipant,
+  SDKTrackReference,
+  SDKTrackPublication,
+  SDKRoom,
+  ParticipantMetadata,
+  Agenda,
+  AddonType,
 };
