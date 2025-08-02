@@ -471,32 +471,32 @@ import {
 } from "../../../src/index";
 import ParticipantTileContent from "./participant-tile";
 
-
 type MeetingViewProps = {
   setShowParticipantList: () => void;
 }
+
 export default function MeetingView({ setShowParticipantList }: MeetingViewProps) {
-  // Initialize the meeting room with default sort
+  // Initialize the meeting room with active speaker promotion enabled
   const meeting = useStreamRoom({
     defaultSortStrategy: ParticipantSortStrategy.ROLE_BASED,
     enableSpeakerEvents: true,
+    autoPromoteActiveSpeakers: true, // Enable automatic speaker promotion
   });
 
-  const [activeSpeaker, setActiveSpeaker] = useState<string | null>(null);
+  // State to track if we should force refresh the view
+  const [, setRefreshTrigger] = useState(0);
 
-  // Listen for speaking events to highlight active speaker
+  // Listen for speaking events to force UI updates
   useEffect(() => {
-    const handleSpeakingStarted = (event: { participant: SDKParticipant }) => {
-      setActiveSpeaker(event.participant.identity);
+    const handleSpeakingStarted = () => {
+      // Force a re-render when someone starts speaking
+      // This ensures the sorted participants list is recalculated
+      setRefreshTrigger(prev => prev + 1);
     };
 
     const handleSpeakingStopped = () => {
-      // Could implement logic to find next active speaker or clear
-      setTimeout(() => {
-        if (meeting.participants.speaking.size === 0) {
-          setActiveSpeaker(null);
-        }
-      }, 1000);
+      // Force a re-render when someone stops speaking
+      setRefreshTrigger(prev => prev + 1);
     };
 
     meeting.on("speakingStarted", handleSpeakingStarted);
@@ -509,8 +509,7 @@ export default function MeetingView({ setShowParticipantList }: MeetingViewProps
   }, [meeting]);
 
   // Determine mobile view
-  const isMobileView =
-    meeting.screenSize === "xs" || meeting.screenSize === "sm";
+  const isMobileView = meeting.screenSize === "xs" || meeting.screenSize === "sm";
 
   // Get max visible participants based on screen size
   const getMaxVisibleParticipants = () => {
@@ -520,15 +519,19 @@ export default function MeetingView({ setShowParticipantList }: MeetingViewProps
     return 5; // xl
   };
 
-  // Get sorted participants with host/co-host roles
+  // Get sorted participants with active speaker priority
   const allParticipants = useMemo(() => {
+    // When getting sorted participants, active speakers will be automatically prioritized
     return meeting.getSortedParticipants({
       strategy: ParticipantSortStrategy.ROLE_BASED,
-      includeRoles: ["host", "co-host"],
+      prioritizeActiveSpeakers: true, // Ensure active speakers are prioritized
     });
-  }, [meeting]);
+  }, [meeting, meeting.participants.speaking, meeting.participants.currentActiveSpeaker]);
 
-  // Separate host and co-hosts
+  // Get current active speaker for highlighting
+  const activeSpeaker = meeting.participants.currentActiveSpeaker;
+
+  // Separate host
   const hostParticipant = meeting.participants.host;
 
   // Get camera tracks for display
@@ -545,7 +548,33 @@ export default function MeetingView({ setShowParticipantList }: MeetingViewProps
 
   // Calculate visible participants and overflow
   const maxVisible = getMaxVisibleParticipants();
-  const visibleParticipants = allParticipants.slice(0, maxVisible);
+  
+  // Important: Make sure active speakers are included in visible participants
+  const visibleParticipants = useMemo(() => {
+    const sorted = allParticipants;
+    
+    // If there's an active speaker in overflow, swap them with a non-speaking participant
+    if (activeSpeaker) {
+      const activeSpeakerIndex = sorted.findIndex(p => p.identity === activeSpeaker);
+      
+      // If active speaker is beyond visible range, move them up
+      if (activeSpeakerIndex >= maxVisible) {
+        // Find the last non-speaking participant in visible range
+        for (let i = maxVisible - 1; i >= 0; i--) {
+          if (!meeting.isParticipantSpeaking(sorted[i].identity)) {
+            // Swap positions
+            const temp = sorted[i];
+            sorted[i] = sorted[activeSpeakerIndex];
+            sorted[activeSpeakerIndex] = temp;
+            break;
+          }
+        }
+      }
+    }
+    
+    return sorted.slice(0, maxVisible);
+  }, [allParticipants, maxVisible, activeSpeaker, meeting]);
+  
   const overflowParticipants = allParticipants.slice(maxVisible);
   const overflowCount = overflowParticipants.length;
 
@@ -567,39 +596,29 @@ export default function MeetingView({ setShowParticipantList }: MeetingViewProps
     };
   };
 
-  // Determine layout type
-  // const calculateLayoutType = () => {
-  //   if (meeting.tracks.screenShare) {
-  //     return "screenshare";
-  //   }
-
-  //   if (allParticipants.length === 1) {
-  //     return "single-participant";
-  //   }
-
-  //   if (allParticipants.length === 2) {
-  //     return "two-participants";
-  //   }
-
-  //   return "multi-participant";
-  // };
-
-  // const layoutType = calculateLayoutType();
-
   // Get bottom row participants for screen share layout
   const getBottomRowParticipants = (): SDKParticipant[] => {
     if (!meeting.tracks.screenShare) return [];
 
-    const screenSharerIdentity =
-      meeting.tracks.screenShare.participant?.identity;
+    const screenSharerIdentity = meeting.tracks.screenShare.participant?.identity;
     const participants: SDKParticipant[] = [];
 
-    // Add host first if they're not screen sharing
-    if (hostParticipant && hostParticipant.identity !== screenSharerIdentity) {
+    // Prioritize active speakers first
+    if (activeSpeaker && activeSpeaker !== screenSharerIdentity) {
+      const activeSpeakerParticipant = allParticipants.find(p => p.identity === activeSpeaker);
+      if (activeSpeakerParticipant) {
+        participants.push(activeSpeakerParticipant);
+      }
+    }
+
+    // Add host if they're not screen sharing and not already added
+    if (hostParticipant && 
+        hostParticipant.identity !== screenSharerIdentity &&
+        hostParticipant.identity !== activeSpeaker) {
       participants.push(hostParticipant);
     }
 
-    // Add visible co-hosts who aren't screen sharing
+    // Add other participants
     visibleParticipants.forEach((p) => {
       if (
         p.identity !== screenSharerIdentity &&
@@ -675,7 +694,7 @@ export default function MeetingView({ setShowParticipantList }: MeetingViewProps
     );
   };
 
-  // Render participant
+  // Render participant with active speaker highlighting
   const renderParticipant = (
     participant: SDKParticipant,
     track: SDKTrackReference | null
@@ -683,8 +702,8 @@ export default function MeetingView({ setShowParticipantList }: MeetingViewProps
     if (!participant) return null;
 
     const isActive = participant.identity === activeSpeaker;
-    const isLocalParticipant =
-      participant.identity === meeting.participants.local?.identity;
+    const isSpeaking = meeting.isParticipantSpeaking(participant.identity);
+    const isLocalParticipant = participant.identity === meeting.participants.local?.identity;
 
     // Get track states
     let isCameraOn = false;
@@ -717,10 +736,25 @@ export default function MeetingView({ setShowParticipantList }: MeetingViewProps
     return (
       <div key={uniqueKey} className="h-full w-full">
         <div
-          className={`relative rounded-lg overflow-hidden bg-red-900 h-full w-full ${
-            isActive ? "ring-4 ring-primary animate-pulse" : ""
+          className={`relative rounded-lg overflow-hidden bg-red-900 h-full w-full transition-all duration-300 ${
+            isActive 
+              ? "ring-4 ring-primary shadow-lg scale-[1.02]" 
+              : isSpeaking 
+                ? "ring-2 ring-primary/50" 
+                : ""
           }`}
         >
+          {/* Speaking indicator */}
+          {(isActive || isSpeaking) && !isScreenShare && (
+            <div className="absolute top-2 right-2 z-20">
+              <div className="flex items-center space-x-1">
+                <div className="w-2 h-2 bg-primary rounded-full animate-pulse" />
+                <div className="w-2 h-2 bg-primary rounded-full animate-pulse animation-delay-100" />
+                <div className="w-2 h-2 bg-primary rounded-full animate-pulse animation-delay-200" />
+              </div>
+            </div>
+          )}
+
           {isScreenShare ? (
             // Screen share view
             <div className="h-full w-full flex items-center justify-center">
@@ -784,8 +818,7 @@ export default function MeetingView({ setShowParticipantList }: MeetingViewProps
     }
 
     const cameraTrack = track || getCameraTrackForParticipant(participant);
-    const key =
-      participant.identity || participant.sid || Math.random().toString();
+    const key = participant.identity || participant.sid || Math.random().toString();
 
     return (
       <div key={key} className="h-full w-full">

@@ -12,10 +12,12 @@ function App() {
     <ErrorBoundary>
       <SolanaWalletSetter />
       <VidbloqProvider
-        apiKey="sk_5fa927d2ad021016ae36b2656fbf8085"
-        apiSecret="iO24O0xXjuXSsIhfLorPKRS2NvcWjbRswYLcnYAvxk4="
+        // apiKey="sk_5fa927d2ad021016ae36b2656fbf8085"
+        // apiSecret="iO24O0xXjuXSsIhfLorPKRS2NvcWjbRswYLcnYAvxk4="
+        apiKey="sk_c061e1d6fa8b1438226b1cc8b8764136"
+        apiSecret="ZHJEEBSlufheOxXnrMdrBp5QepVf+UAVOaLAUKHa+14="
       >
-        <StreamRoom roomName={"lld-bmn-0n1"}>
+        <StreamRoom roomName={"ejw-6ti-it5"}>
           <StreamView> 
             <UserView />
           </StreamView>
