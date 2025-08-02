@@ -9,7 +9,7 @@ import Meeting from "./meeting";
 import RaisedHandCard from "./raised-hand";
 import RequestCard from "./request-card";
 import Prejoin from "./prejoin";
-import ContestModeTest from "./contest-test";
+// import ContestModeTest from "./contest-test";
 // import AddonTestSuite from "./addon-testing";
 import { WebSocketDebugger } from "../WebSocketDebugger";
 
@@ -129,7 +129,7 @@ const UserView = () => {
       ) : (
         <Livestream />
       )}
-      <ContestModeTest />
+      {/* <ContestModeTest /> */}
       <div className="w-[90%] lg:w-[80%] mx-auto">
         <CallControls />
       </div>
