@@ -1,6 +1,8 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { TrackReference } from "@livekit/components-react";
 
 import { LocalParticipant, RemoteParticipant } from "livekit-client";
+import { useWebSocket } from "../hooks";
 
 // Most of these types will change based on the new schema type. e.g there is no AgendaDetails model anymore
 export type StreamScheduleType = "instant" | "scheduled";
@@ -46,6 +48,7 @@ export interface BaseAgendaItem {
   action: AgendaAction;
   title?: string;
   description?: string;
+  duration?: number;
 }
 
 export interface PollAgendaItem extends BaseAgendaItem {
@@ -131,10 +134,12 @@ type CustomContent = {
 export type Agenda  = {
   id: string;
   streamId: string;
+  isCompleted: boolean;
   timeStamp: number;
   action: AgendaAction;
   title: string | null;
   description: string | null;
+  duration: string | null;
   tenantId: string;
   pollContent?: PollContent;
   quizContent?: QuizContent;
@@ -145,8 +150,10 @@ export type Agenda  = {
 
 export interface AgendaUpdate {
   wallet: string;
+  isCompleted: boolean;
   title?: string;
   description?: string;
+  duration?: number;
   timeStamp?: number;
   options?: string[];                 // For Poll agenda
   questions?: Array<{                 // For Quiz agenda
@@ -238,3 +245,147 @@ export interface RaisedHandsUpdateMessage {
   event: "raisedHandsUpdate";
   data: RaisedHand[];
 }
+
+export type CustomAction = {
+  id: string;
+  label?: string;
+  icon?: React.ReactNode;
+  check?: (state: CallControlsRenderProps) => boolean;
+  disabled?: (state: CallControlsRenderProps) => boolean;
+  handler: (state: CallControlsRenderProps) => void | Promise<void>;
+  group?: 'primary' | 'secondary' | 'danger';
+  position?: 'start' | 'end' | number;
+};
+
+export type BaseCallControlsProps = {
+  // Feature flags
+  features?: {
+    media?: boolean;
+    recording?: boolean;
+    handRaise?: boolean;
+    guestRequests?: boolean;
+    screenShare?: boolean;
+    disconnect?: boolean;
+  };
+  
+  // Custom actions that can be injected
+  customActions?: CustomAction[];
+  
+  // Event callbacks
+  onStateChange?: (state: CallControlsState) => void;
+  onRaiseHand?: () => void;
+  onReturnToGuest?: () => void;
+  onDisconnect?: () => void;
+  onRecordToggle?: (isRecording: boolean) => void;
+  onMicToggle?: (enabled: boolean) => void;
+  onCameraToggle?: (enabled: boolean) => void;
+  onScreenShareToggle?: (enabled: boolean) => void;
+  onHandRaised?: () => void;
+  onHandLowered?: () => void;
+  beforeDisconnect?: () => Promise<boolean>;
+  
+  // Initial states
+  initialStates?: {
+    isMicEnabled?: boolean;
+    isCameraEnabled?: boolean;
+    isScreenSharingEnabled?: boolean;
+    isRecording?: boolean;
+  };
+  
+  // Plugin system
+  plugins?: CallControlPlugin[];
+  
+  // Render function
+  render: (props: CallControlsRenderProps) => React.ReactNode;
+};
+
+export interface CallControlPlugin {
+  name: string;
+  initialize?: (context: CallControlContext) => void;
+  getState?: () => any;
+  getHandlers?: () => Record<string, () => void>;
+  cleanup?: () => void;
+}
+
+export type CallControlContext = {
+  websocket: ReturnType<typeof useWebSocket>;
+  roomName: string;
+  identity: string;
+  userType: UserType;
+  addNotification: (notification: any) => void;
+};
+
+export type CallControlsState = {
+  isInvited: boolean;
+  hasPendingRequest: boolean;
+  isRecording: boolean;
+  isHandRaised: boolean;
+  isMicEnabled: boolean;
+  isCameraEnabled: boolean;
+  isScreenSharingEnabled: boolean;
+};
+
+export type CallControlsRenderProps = {
+  // States
+  isInvited: boolean;
+  hasPendingRequest: boolean;
+  isRecording: boolean;
+  isHandRaised: boolean;
+  
+  // Connection states
+  isConnecting: boolean;
+  connectionQuality?: 'excellent' | 'good' | 'poor';
+  
+  // Permissions
+  canAccessMediaControls: boolean;
+  canRaiseHand: boolean;
+  canRecord: boolean;
+  canScreenShare: boolean;
+  canInviteGuests: boolean;
+  permissions: {
+    canToggleMic: boolean;
+    canToggleCamera: boolean;
+    canScreenShare: boolean;
+    canRecord: boolean;
+  };
+  
+  // User info
+  userType: UserType;
+  isGuest: boolean;
+  identity: string;
+  displayName: string;
+  
+  // Track states
+  isMicEnabled: boolean;
+  isCameraEnabled: boolean;
+  isScreenSharingEnabled: boolean;
+  
+  // Actions - only provided if feature is enabled
+  toggleMic?: () => void;
+  toggleCamera?: () => void;
+  toggleScreenShare?: () => void;
+  toggleRecording?: () => void;
+  requestToSpeak?: () => void;
+  raiseHand?: () => void;
+  lowerHand?: () => void;
+  handleDisconnectClick?: () => Promise<void>;
+  
+  // Custom actions
+  customActions?: CustomAction[];
+  
+  // Room info
+  roomName: string;
+  streamSessionType?: string;
+  participantCount?: number;
+  
+  // Utility functions
+  utils: {
+    formatDuration: (seconds: number) => string;
+    getParticipantDisplayName: () => string;
+    sortCustomActions: (actions: CustomAction[]) => CustomAction[];
+  };
+  
+  // Plugin states
+  pluginStates?: Record<string, any>;
+  pluginHandlers?: Record<string, Record<string, () => void>>;
+};

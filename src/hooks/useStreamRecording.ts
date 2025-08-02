@@ -5,7 +5,7 @@ import { useNotification } from "./useNotification";
 import { useRequirePublicKey } from "./useRequirePublicKey";
 import { RecordingStartResponse, RecordingStopResponse } from "../types/index";
 
-interface UseStreamRecordingOptions {
+interface UseStreamRecordingYoutubeOptions {
   /**
    * YouTube RTMP URL
    * Format: rtmp://a.rtmp.youtube.com/live2/[your-stream-key]
@@ -13,7 +13,7 @@ interface UseStreamRecordingOptions {
   youtubeRtmpUrl?: string;
 }
 
-interface UseStreamRecordingReturn {
+interface UseStreamRecordingYoutubeReturn {
   /**
    * Whether recording is currently active
    */
@@ -51,9 +51,9 @@ interface UseStreamRecordingReturn {
  * @param options - Configuration options
  * @returns Object containing recording state and functions
  */
-export const useStreamRecording = (
-  options: UseStreamRecordingOptions = {}
-): UseStreamRecordingReturn => {
+export const useStreamRecordingYoutube = (
+  options: UseStreamRecordingYoutubeOptions = {}
+): UseStreamRecordingYoutubeReturn => {
   const { youtubeRtmpUrl: initialYoutubeUrl } = options;
 
   // State

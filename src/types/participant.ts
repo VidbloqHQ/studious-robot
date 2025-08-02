@@ -1,3 +1,5 @@
+import { Participant } from "./stream";
+
 /* eslint-disable @typescript-eslint/no-explicit-any */
 export interface SDKParticipant {
   sid: string;
@@ -56,4 +58,24 @@ export enum SDKTrackKind {
   Audio = 'audio',
   Video = 'video',
   Unknown = 'unknown'
+}
+
+export enum ParticipantSortStrategy {
+  DEFAULT = 'default',                 // Join order
+  RECENT_SPEAKERS = 'recent_speakers', // Prioritize recent speakers
+  ACTIVE_SPEAKERS = 'active_speakers', // Currently speaking first
+  ROLE_BASED = 'role_based',          // Host > Co-host > Guest
+  CUSTOM = 'custom'                   // User-provided function
+}
+
+export interface SDKChatMessage {
+  id?: string;
+  message: string;
+  parsedContent?: React.ReactNode;
+  participant?: Participant;
+  timestamp: number;
+  from?: {
+    identity: string;
+    metadata?: string;
+  };
 }

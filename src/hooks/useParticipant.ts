@@ -1,8 +1,11 @@
-import { useState, useEffect, useRef, useCallback } from "react";
-import { Participant } from "../types/index";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { Participant, SDKParticipant, EnhancedSDKParticipant, UserType } from "../types/index";
+import { getParticipantMetadata } from "../utils/index";
 import { useStreamContext } from "./useStreamContext";
 import { useTenantContext } from "./useTenantContext";
+import { useRequirePublicKey } from "./useRequirePublicKey";
 import { useNotification } from "./useNotification";
+import { useParticipantTrackStates } from "./useParticipantTrackStates";
 
 
 export const useParticipantList = () => {
@@ -270,5 +273,279 @@ export const useParticipantNotifications = (options: NotificationOptions = {}) =
   return {
     participantCount: participants.length,
     isMonitoring: true
+  };
+};
+
+interface UseParticipantControlsOptions {
+  participant: SDKParticipant | EnhancedSDKParticipant;
+  isLocal?: boolean;
+  isMicrophoneEnabled?: boolean;
+  isCameraEnabled?: boolean;
+}
+
+interface UseParticipantControlsReturn {
+  // States
+  isDemoting: boolean;
+  isPromoting: boolean;
+  
+  // Track states
+  micEnabled: boolean;
+  cameraEnabled: boolean;
+  hasLivekitReference: boolean;
+  
+  // Permissions
+  canGift: boolean;
+  canDemote: boolean;
+  canPromote: boolean;
+  
+  // Actions
+  prepareGiftRecipient: () => Participant | null;
+  demoteParticipant: () => Promise<{ success: boolean; error?: string }>;
+  promoteParticipant: () => Promise<{ success: boolean; error?: string }>;
+  
+  // Participant data
+  participantMetadata: {
+    userName: string;
+    avatarUrl: string;
+    userType: string;
+    walletAddress: string;
+  };
+}
+
+export const useParticipantControls = ({
+  participant,
+  isLocal = false,
+  isMicrophoneEnabled = false,
+  isCameraEnabled = false,
+}: UseParticipantControlsOptions): UseParticipantControlsReturn => {
+  const [isDemoting, setIsDemoting] = useState(false);
+  const [isPromoting, setIsPromoting] = useState(false);
+
+  // Get required hooks
+  const { participants } = useParticipantList();
+  const { userType, roomName, streamMetadata, websocket } = useStreamContext();
+  const { apiClient } = useTenantContext();
+  const { publicKey } = useRequirePublicKey();
+
+  // Track real-time states
+  const trackStates = useParticipantTrackStates(participant, isLocal);
+
+  // Use track states from hook if available, otherwise fall back to props
+  const micEnabled = trackStates.hasLivekitReference 
+    ? trackStates.micEnabled 
+    : isMicrophoneEnabled;
+    
+  const cameraEnabled = trackStates.hasLivekitReference 
+    ? trackStates.cameraEnabled 
+    : isCameraEnabled;
+
+  // Get participant metadata - ensure walletAddress is always a string
+  const metadata = getParticipantMetadata(participant);
+  const participantMetadata = useMemo(() => ({
+    userName: metadata.userName || participant.identity,
+    avatarUrl: metadata.avatarUrl || "",
+    userType: metadata.userType || "guest",
+    walletAddress: typeof metadata.walletAddress === 'string' ? metadata.walletAddress : "",
+  }), [metadata.userName, metadata.avatarUrl, metadata.userType, metadata.walletAddress, participant.identity]);
+
+  // Determine permissions
+  const canGift = !isLocal;
+  
+  const canDemote = !isLocal && 
+    userType === "host" && 
+    participantMetadata.userType === "temp-host" &&
+    streamMetadata?.streamSessionType === "livestream";
+    
+  const canPromote = !isLocal && 
+    userType === "host" && 
+    participantMetadata.userType === "guest" &&
+    (streamMetadata?.streamSessionType === "livestream" || 
+     streamMetadata?.streamSessionType === "meeting");
+
+  // Prepare gift recipient data
+  const prepareGiftRecipient = useCallback((): Participant | null => {
+    // Only proceed if we have a valid wallet address
+    if (participantMetadata.walletAddress) {
+      return {
+        id: participant.identity,
+        userName: participantMetadata.userName,
+        walletAddress: participantMetadata.walletAddress,
+        userType: participantMetadata.userType as UserType,
+        avatarUrl: participantMetadata.avatarUrl,
+      } as Participant;
+    }
+
+    // Fallback: Look up from participant list
+    const fullParticipant = participants.find(
+      (p) => p.id === participant.identity || p.userName === participant.identity
+    );
+
+    if (fullParticipant?.walletAddress) {
+      return fullParticipant;
+    }
+
+    return null;
+  }, [participant, participantMetadata, participants]);
+
+  // Promote participant (from guest to temp-host/co-host)
+  const promoteParticipant = useCallback(async (): Promise<{ success: boolean; error?: string }> => {
+    if (!publicKey) {
+      return {
+        success: false,
+        error: "Public key not available"
+      };
+    }
+
+    if (!participantMetadata.walletAddress) {
+      return {
+        success: false,
+        error: "Participant wallet address not found"
+      };
+    }
+
+    if (!websocket || !websocket.isConnected) {
+      return {
+        success: false,
+        error: "WebSocket not connected"
+      };
+    }
+
+    setIsPromoting(true);
+
+    try {
+      // Call the API to update permissions
+      await apiClient.post("/participant/update/permission", {
+        participantId: participant.identity,
+        streamId: roomName,
+        wallet: publicKey.toString(),
+        participantWallet: participantMetadata.walletAddress,
+        action: "promote"
+      });
+
+      // Send WebSocket message to notify the participant
+      websocket.inviteGuest(roomName, participant.identity);
+
+      setIsPromoting(false);
+      return { 
+        success: true,
+        error: undefined 
+      };
+    } catch (error) {
+      console.error("Error promoting participant:", error);
+      setIsPromoting(false);
+      return { 
+        success: false, 
+        error: "Failed to promote participant" 
+      };
+    }
+  }, [participant, participantMetadata, publicKey, roomName, apiClient, websocket]);
+
+  // Demote participant (from temp-host back to guest)
+  const demoteParticipant = useCallback(async (): Promise<{ success: boolean; error?: string }> => {
+    if (!publicKey) {
+      return {
+        success: false,
+        error: "Public key not available"
+      };
+    }
+
+    if (!participantMetadata.walletAddress) {
+      return {
+        success: false,
+        error: "Participant wallet address not found"
+      };
+    }
+
+    setIsDemoting(true);
+
+    try {
+      await apiClient.post("/participant/update/permission", {
+        participantId: participant.identity,
+        streamId: roomName,
+        wallet: publicKey.toString(),
+        participantWallet: participantMetadata.walletAddress,
+        action: "demote"
+      });
+
+      setIsDemoting(false);
+      return { 
+        success: true,
+        error: undefined 
+      };
+    } catch (error) {
+      console.error("Error demoting participant:", error);
+      setIsDemoting(false);
+      return { 
+        success: false, 
+        error: "Failed to demote participant" 
+      };
+    }
+  }, [participant, participantMetadata, publicKey, roomName, apiClient]);
+
+  return {
+    // States
+    isDemoting,
+    isPromoting,
+    
+    // Track states
+    micEnabled,
+    cameraEnabled,
+    hasLivekitReference: trackStates.hasLivekitReference,
+    
+    // Permissions
+    canGift,
+    canDemote,
+    canPromote,
+    
+    // Actions
+    prepareGiftRecipient,
+    demoteParticipant,
+    promoteParticipant,
+    
+    // Participant data
+    participantMetadata,
+  };
+};
+
+interface UseParticipantDataOptions {
+  participant: SDKParticipant | EnhancedSDKParticipant;
+}
+
+interface UseParticipantDataReturn {
+  identity: string;
+  sid: string;
+  userName: string;
+  avatarUrl: string;
+  userType: string;
+  initials: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  metadata: Record<string, any>;
+}
+
+export const useParticipantData = ({
+  participant,
+}: UseParticipantDataOptions): UseParticipantDataReturn => {
+  // Get participant metadata
+  const metadata = getParticipantMetadata(participant);
+  
+  const userName = metadata.userName || participant.identity;
+  const avatarUrl = metadata.avatarUrl || "";
+  
+  // Generate initials from username
+  const initials = userName
+    .split(" ")
+    .map((name: string) => name[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+
+  return {
+    identity: participant.identity,
+    sid: participant.sid,
+    userName,
+    avatarUrl,
+    userType: metadata.userType || "guest",
+    initials,
+    metadata, // Expose raw metadata for custom use cases
   };
 };
