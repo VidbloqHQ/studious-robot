@@ -1,28 +1,32 @@
 import { StreamRoom, StreamView, VidbloqProvider } from "./components";
-import  ErrorBoundary  from "./ErrorBoundary";
+import ErrorBoundary from "./ErrorBoundary";
 import SolanaWalletSetter from "./components/SolanaWalletSetter";
-// import TestingHooks from "./components/TestingHooks";
+import UserView from "./components/ui-remove/user-view";
+// import TestingHooks from "./components/TestingHooks"; ded-ihx-vkh
 // import CallControlz from "./components/call-controlz"; ki5-kcd-n8v     "build": "tsc && vite build",
 // import WebSocketTest from "./components/websockettest"; xu0-7sx-hoz     // "build": "tsup", rnk-vho-hpv
 
 function App() {
-  // const showDebug = isIOSBrowser();
+
   return (
     <ErrorBoundary>
-        <SolanaWalletSetter />
-        <VidbloqProvider
-          apiKey="sk_5fa927d2ad021016ae36b2656fbf8085"
-          apiSecret="iO24O0xXjuXSsIhfLorPKRS2NvcWjbRswYLcnYAvxk4="
-        >
-          <StreamRoom roomName={"ki5-kcd-n8v"}> 
-            <StreamView />
-          </StreamRoom>
-          {/* <TestingHooks /> */}
-          {/* <WebSocketTest /> */}
-          {/* <CallControlz /> */}
-        </VidbloqProvider>
+      <SolanaWalletSetter />
+      <VidbloqProvider
+        apiKey="sk_5fa927d2ad021016ae36b2656fbf8085"
+        apiSecret="iO24O0xXjuXSsIhfLorPKRS2NvcWjbRswYLcnYAvxk4="
+      >
+        <StreamRoom roomName={"lld-bmn-0n1"}>
+          <StreamView> 
+            <UserView />
+          </StreamView>
+        </StreamRoom>
+      </VidbloqProvider>
     </ErrorBoundary>
   );
 }
 
 export default App;
+
+// new - i6p-b8z-7w9 w00-10d-9yk lld-bmn-0n1 https://thestreamlink.com/984-7ju-u9e
+
+// dm1-vus-bql 4ky-7b7-k13 https://thestreamlink.com/9m1-y8c-9d0
