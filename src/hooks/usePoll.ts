@@ -60,7 +60,7 @@ export const useSubmitPollVote = (): UseSubmitPollVoteReturn => {
     
     try {
       // Use the API client to make the POST request to the /poll/vote endpoint
-      const voteResponse = await apiClient.post<PollVoteResponse>('/poll/vote', data);
+      const voteResponse = await apiClient.post<PollVoteResponse>('/poll', data);
       
       setResponse(voteResponse);
       return voteResponse;
@@ -125,7 +125,7 @@ export const useGetPollResults = (): UseGetPollResultsReturn => {
     
     try {
       // Use the API client to make the GET request to the /poll/:agendaId/results endpoint
-      const pollResults = await apiClient.get<PollResultsResponse>(`/poll/${agendaId}/results`);
+      const pollResults = await apiClient.get<PollResultsResponse>(`/poll/${agendaId}`);
       
       setResults(pollResults);
       return pollResults;
