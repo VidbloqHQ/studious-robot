@@ -2,11 +2,10 @@ import {
   ParticipantContext,
   useLocalParticipant,
 } from "@livekit/components-react";
-import UserView from "./user-view";
 import { ParticipantNotifications } from "./participant-notifications";
 
 type StreamContainerProps = {
-  children?: React.ReactNode;
+  children: React.ReactNode;
 };
 
 const StreamContainer = ({children}: StreamContainerProps) => {
@@ -14,7 +13,7 @@ const StreamContainer = ({children}: StreamContainerProps) => {
   return (
     <ParticipantContext.Provider value={p.localParticipant}>
        <ParticipantNotifications />
-        {children ?? <UserView />}
+        {children}
     </ParticipantContext.Provider>
   )
 }

@@ -9,7 +9,7 @@ import {
   UserType,
   StreamMetadata,
   GuestRequest,
-  Agenda,
+  // Agenda,
   TokenResponse,
   StreamResponse,
   Participant,
@@ -39,6 +39,7 @@ function debounce<T extends (...args: any[]) => any>(
 type StreamContextType = {
   roomName: string;
   userType: UserType | null;
+  setUserType: (type: UserType | null) => void;
   websocket: ReturnType<typeof useWebSocket> | null;
   streamMetadata: StreamMetadata;
   setStreamMetadata: (metadata: StreamMetadata) => void;
@@ -53,8 +54,8 @@ type StreamContextType = {
   setNickname: React.Dispatch<React.SetStateAction<string>>;
   generateToken: (val: string, avatarUrl?: string) => Promise<void>;
   setToken: (token: string | undefined) => void;
-  agendas: Agenda[];
-  setAgendas: (agendas: Agenda[]) => void;
+  // agendas: Agenda[];
+  // setAgendas: (agendas: Agenda[]) => void;
   currentTime: number;
   setCurrentTime: (val: number) => void;
   audioEnabled: boolean;
@@ -91,7 +92,7 @@ export const StreamProvider = ({
   const [raisedHands, setRaisedHands] = useState<RaisedHand[]>([]);
   const [identity, setIdentity] = useState<string>();
   const [token, setToken] = useState<string>();
-  const [agendas, setAgendas] = useState<Agenda[]>([]);
+  // const [agendas, setAgendas] = useState<Agenda[]>([]);
   const [audioEnabled, setAudioEnabled] = useState<boolean>(false);
   const [videoEnabled, setVideoEnabled] = useState<boolean>(false);
   const [currentTime, setCurrentTime] = useState<number>(0);
@@ -472,6 +473,7 @@ export const StreamProvider = ({
       value={{
         roomName,
         userType,
+        setUserType,
         websocket,
         streamMetadata,
         setStreamMetadata,
@@ -484,8 +486,8 @@ export const StreamProvider = ({
         token,
         generateToken,
         setToken,
-        agendas,
-        setAgendas,
+        // agendas,
+        // setAgendas,
         currentTime,
         setCurrentTime,
         setVideoEnabled,
@@ -505,3 +507,4 @@ export const StreamProvider = ({
     </StreamContext.Provider>
   );
 };
+

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Track, TrackPublication } from "livekit-client";
 import { useLocalParticipant, useRoomContext } from "@livekit/components-react";
@@ -7,57 +8,64 @@ import {
   useRequirePublicKey,
   useNotification,
 } from "../hooks";
-import { GuestRequest, UserType } from "../types";
-
-export type BaseCallControlsProps = {
-  onRaiseHand?: () => void;
-  onReturnToGuest?: () => void;
-  onDisconnect?: () => void;
-  onAgendaToggle?: () => void;
-  onChatToggle?: () => void;
-  onReactionsToggle?: () => void;
-  onRecordToggle?: () => void;
-  customHandlers?: Record<string, () => void>;
-  render?: (props: CallControlsRenderProps) => React.ReactNode;
-};
-
-export type CallControlsRenderProps = {
-  isInvited: boolean;
-  hasPendingRequest: boolean;
-  canAccessMediaControls: boolean;
-  isGuest: boolean;
-  isMicEnabled: boolean;
-  isCameraEnabled: boolean;
-  isScreenSharingEnabled: boolean;
-  isRecording: boolean;
-  handleDisconnectClick: () => Promise<void>;
-  toggleMic: () => void;
-  toggleCamera: () => void;
-  toggleScreenShare: () => void;
-  toggleRecording: () => void;
-  requestToSpeak: () => void;
-  userType: UserType;
-  // New raise hand props
-  isHandRaised: boolean;
-  canRaiseHand: boolean;
-  raiseHand: () => void;
-  lowerHand: () => void;
-};
+import {
+  BaseCallControlsProps,
+  CallControlContext,
+  CallControlsRenderProps,
+  CallControlsState,
+  CustomAction,
+  GuestRequest,
+  UserType,
+} from "../types";
 
 const BaseCallControls = ({
+  features = {
+    media: true,
+    recording: true,
+    handRaise: true,
+    guestRequests: true,
+    screenShare: true,
+    disconnect: true,
+  },
+  customActions,
+  onStateChange,
   onRaiseHand,
   onReturnToGuest,
   onDisconnect,
   onRecordToggle,
+  onMicToggle,
+  onCameraToggle,
+  onScreenShareToggle,
+  onHandRaised,
+  onHandLowered,
+  beforeDisconnect,
+  initialStates = {},
+  plugins = [],
   render,
 }: BaseCallControlsProps) => {
   const [isInvited, setIsInvited] = useState<boolean>(false);
   const [hasPendingRequest, setHasPendingRequest] = useState<boolean>(false);
-  const [isMicEnabled, setIsMicEnabled] = useState<boolean>(false);
-  const [isCameraEnabled, setIsCameraEnabled] = useState<boolean>(false);
-  const [isScreenSharingEnabled, setIsScreenSharingEnabled] = useState<boolean>(false);
-  const [isRecording, setIsRecording] = useState<boolean>(false);
+  const [isMicEnabled, setIsMicEnabled] = useState<boolean>(
+    initialStates.isMicEnabled ?? false
+  );
+  const [isCameraEnabled, setIsCameraEnabled] = useState<boolean>(
+    initialStates.isCameraEnabled ?? false
+  );
+  const [isScreenSharingEnabled, setIsScreenSharingEnabled] = useState<boolean>(
+    initialStates.isScreenSharingEnabled ?? false
+  );
+  const [isRecording, setIsRecording] = useState<boolean>(
+    initialStates.isRecording ?? false
+  );
   const [isHandRaised, setIsHandRaised] = useState<boolean>(false);
+  const [isConnecting, setIsConnecting] = useState<boolean>(false);
+  const [connectionQuality, setConnectionQuality] = useState<
+    "excellent" | "good" | "poor"
+  >("good");
+  const [pluginStates, setPluginStates] = useState<Record<string, any>>({});
+  const [pluginHandlers, setPluginHandlers] = useState<
+    Record<string, Record<string, () => void>>
+  >({});
 
   const {
     roomName,
@@ -70,13 +78,17 @@ const BaseCallControls = ({
     raisedHands,
     streamMetadata,
     nickname,
+    setUserType,
   } = useStreamContext();
 
-  const canAccessMediaControls = userType === "host" || userType === "co-host" || isInvited;
+  const canAccessMediaControls =
+    userType === "host" || userType === "co-host" || isInvited;
   const isGuest = userType === "guest";
   const { publicKey } = useRequirePublicKey();
   const p = useLocalParticipant();
-  const { leaveStream } = useHandleStreamDisconnect(publicKey?.toString() ?? "");
+  const { leaveStream } = useHandleStreamDisconnect(
+    publicKey?.toString() ?? ""
+  );
   const { addNotification } = useNotification();
   const room = useRoomContext();
 
@@ -85,15 +97,101 @@ const BaseCallControls = ({
   const roomJoinedRef = useRef(false);
   const identityRef = useRef<string | null>(null);
   const guestRequestsRef = useRef<GuestRequest[]>([]);
+  const prevStateRef = useRef<CallControlsState>(undefined);
+
+  // Initialize plugins
+  useEffect(() => {
+    if (!identityRef.current || !websocket) return;
+
+    const context: CallControlContext = {
+      websocket,
+      roomName,
+      identity: identityRef.current,
+      userType: userType || "guest",
+      addNotification,
+    };
+
+    // Initialize each plugin
+    plugins.forEach((plugin) => {
+      plugin.initialize?.(context);
+
+      // Get plugin state
+      const state = plugin.getState?.();
+      if (state) {
+        setPluginStates((prev) => ({ ...prev, [plugin.name]: state }));
+      }
+
+      // Get plugin handlers
+      const handlers = plugin.getHandlers?.();
+      if (handlers) {
+        setPluginHandlers((prev) => ({ ...prev, [plugin.name]: handlers }));
+      }
+    });
+
+    // Cleanup on unmount
+    return () => {
+      plugins.forEach((plugin) => plugin.cleanup?.());
+    };
+  }, [plugins, websocket, roomName, userType, addNotification]);
+
+  // Emit state changes
+  useEffect(() => {
+    const currentState: CallControlsState = {
+      isInvited,
+      hasPendingRequest,
+      isRecording,
+      isHandRaised,
+      isMicEnabled,
+      isCameraEnabled,
+      isScreenSharingEnabled,
+    };
+
+    // Check if state has changed
+    if (
+      prevStateRef.current &&
+      JSON.stringify(prevStateRef.current) !== JSON.stringify(currentState)
+    ) {
+      onStateChange?.(currentState);
+    }
+    prevStateRef.current = currentState;
+  }, [
+    isInvited,
+    hasPendingRequest,
+    isRecording,
+    isHandRaised,
+    isMicEnabled,
+    isCameraEnabled,
+    isScreenSharingEnabled,
+    onStateChange,
+  ]);
 
   // Set identity once when we have a participant
   useEffect(() => {
-    if (p.localParticipant?.identity && p.localParticipant.identity !== identityRef.current) {
+    if (
+      p.localParticipant?.identity &&
+      p.localParticipant.identity !== identityRef.current
+    ) {
       identityRef.current = p.localParticipant.identity;
       setIdentity(p.localParticipant.identity);
-      // console.log("Identity set to:", p.localParticipant.identity);
     }
   }, [p.localParticipant?.identity, setIdentity]);
+
+  // Monitor connection quality
+  useEffect(() => {
+    if (!room) return;
+
+    const updateConnectionQuality = () => {
+      const stats = room.localParticipant?.connectionQuality;
+      if (stats === "excellent") setConnectionQuality("excellent");
+      else if (stats === "good") setConnectionQuality("good");
+      else setConnectionQuality("poor");
+    };
+
+    room.on("connectionQualityChanged", updateConnectionQuality);
+    return () => {
+      room.off("connectionQualityChanged", updateConnectionQuality);
+    };
+  }, [room]);
 
   // Check if current participant has raised hand
   useEffect(() => {
@@ -105,19 +203,50 @@ const BaseCallControls = ({
     }
   }, [raisedHands]);
 
-  // Determine if user can raise hand (meetings only, host/co-host)
-  const canRaiseHand = streamMetadata.streamSessionType === "meeting" && 
-                       (userType === "host" || userType === "co-host");
+  // Determine permissions based on user type and stream type
+  const permissions = {
+    canRaiseHand:
+      streamMetadata?.streamSessionType === "meeting" &&
+      (userType === "host" || userType === "co-host"),
+    canRecord: userType === "host",
+    canScreenShare: canAccessMediaControls,
+    canInviteGuests:
+      userType === "host" && streamMetadata?.streamSessionType === "livestream",
+    canToggleMic: canAccessMediaControls,
+    canToggleCamera: canAccessMediaControls,
+  };
+
+  // Get display name
+  const getDisplayName = useCallback(() => {
+    let displayName = nickname || identityRef.current || "";
+
+    if (p.localParticipant?.metadata) {
+      try {
+        const metadata = JSON.parse(p.localParticipant.metadata);
+        displayName = metadata.userName || displayName;
+      } catch (e) {
+        console.error("Failed to parse participant metadata:", e);
+      }
+    }
+
+    return displayName;
+  }, [nickname, p.localParticipant?.metadata]);
 
   // Join room ONCE when we have all requirements
   useEffect(() => {
-    if (!websocket?.isConnected || !roomName || !identityRef.current || roomJoinedRef.current) {
+    if (
+      !websocket?.isConnected ||
+      !roomName ||
+      !identityRef.current ||
+      roomJoinedRef.current
+    ) {
       return;
     }
 
-    // console.log(`Joining room ${roomName} with identity ${identityRef.current}`);
+    setIsConnecting(true);
     websocket.joinRoom(roomName, identityRef.current);
     roomJoinedRef.current = true;
+    setIsConnecting(false);
 
     // Request guest list if host
     if (userType === "host") {
@@ -137,7 +266,7 @@ const BaseCallControls = ({
           websocket.sendMessage("participantActive", {
             participantId: identityRef.current,
             roomName,
-            timestamp: Date.now()
+            timestamp: Date.now(),
           });
         } catch (error) {
           console.error("Failed to send activity signal:", error);
@@ -145,10 +274,7 @@ const BaseCallControls = ({
       }
     };
 
-    // Send initial activity after a delay
     const initialTimer = setTimeout(sendActivity, 2000);
-    
-    // Send activity every 30 seconds
     const intervalId = setInterval(sendActivity, 30000);
 
     return () => {
@@ -159,12 +285,15 @@ const BaseCallControls = ({
 
   // Set up WebSocket event handlers ONCE
   useEffect(() => {
-    if (!websocket || wsSetupCompleteRef.current || !identityRef.current) return;
+    if (!websocket || wsSetupCompleteRef.current || !identityRef.current)
+      return;
 
-    // console.log("Setting up WebSocket event handlers");
     wsSetupCompleteRef.current = true;
 
-    const handleInviteGuest = (data: { participantId: string; roomName: string }) => {
+    const handleInviteGuest = (data: {
+      participantId: string;
+      roomName: string;
+    }) => {
       if (data.participantId === identityRef.current) {
         setIsInvited(true);
         setHasPendingRequest(false);
@@ -176,7 +305,10 @@ const BaseCallControls = ({
       }
     };
 
-    const handleReturnToGuest = (data: { participantId: string; roomName: string }) => {
+    const handleReturnToGuest = (data: {
+      participantId: string;
+      roomName: string;
+    }) => {
       if (data.participantId === identityRef.current) {
         setIsInvited(false);
         setHasPendingRequest(false);
@@ -200,50 +332,65 @@ const BaseCallControls = ({
       setHasPendingRequest(hasRequest);
     };
 
-    const handleNewToken = async (data: { token: string }) => {
+    const handleNewToken = async (data: {
+      token: string;
+      newUserType: UserType;
+    }) => {
       if (!room) {
         console.warn("LiveKit room is not available");
         return;
       }
 
       try {
+        setIsConnecting(true);
         await room.disconnect();
-        await room.connect("wss://streamlink-vtdavgse.livekit.cloud", data.token);
-        // console.log("Successfully reconnected to LiveKit!");
+        await room.connect(
+          "wss://streamlink-vtdavgse.livekit.cloud",
+          data.token
+        );
+        setUserType(data.newUserType);
+        setIsConnecting(false);
       } catch (error) {
         console.error("Error reconnecting to LiveKit:", error);
+        setIsConnecting(false);
       }
     };
 
-    // Add event listeners
     websocket.addEventListener("inviteGuest", handleInviteGuest);
     websocket.addEventListener("returnToGuest", handleReturnToGuest);
-    websocket.addEventListener("guestRequestsUpdate", handleGuestRequestsUpdate);
+    websocket.addEventListener(
+      "guestRequestsUpdate",
+      handleGuestRequestsUpdate
+    );
     websocket.addEventListener("newToken", handleNewToken);
 
-    // Cleanup
     return () => {
-      // console.log("Cleaning up WebSocket event listeners");
       websocket.removeEventListener("inviteGuest", handleInviteGuest);
       websocket.removeEventListener("returnToGuest", handleReturnToGuest);
-      websocket.removeEventListener("guestRequestsUpdate", handleGuestRequestsUpdate);
+      websocket.removeEventListener(
+        "guestRequestsUpdate",
+        handleGuestRequestsUpdate
+      );
       websocket.removeEventListener("newToken", handleNewToken);
       wsSetupCompleteRef.current = false;
     };
-  }, [websocket, addNotification, setGuestRequests, setToken, room, onReturnToGuest]);
+  }, [
+    websocket,
+    addNotification,
+    setGuestRequests,
+    setToken,
+    room,
+    onReturnToGuest,
+    setUserType,
+  ]);
 
   // Handle WebSocket reconnection
   useEffect(() => {
     if (!websocket) return;
 
     const handleWebSocketConnect = () => {
-      // console.log("WebSocket reconnected");
-      
-      // Reset flags to allow re-setup
       roomJoinedRef.current = false;
       wsSetupCompleteRef.current = false;
-      
-      // The room join will happen automatically via the main join effect
     };
 
     window.addEventListener("connect", handleWebSocketConnect);
@@ -255,7 +402,7 @@ const BaseCallControls = ({
   // Update guest requests from context
   useEffect(() => {
     if (!guestRequests || !identityRef.current) return;
-    
+
     guestRequestsRef.current = [...guestRequests];
     const hasRequest = guestRequests.some(
       (request) => request.participantId === identityRef.current
@@ -265,36 +412,59 @@ const BaseCallControls = ({
 
   // Lower hand function
   const lowerHand = useCallback(() => {
-    if (!websocket?.isConnected || !identityRef.current) {
-      console.warn("Cannot lower hand - missing requirements");
+    if (
+      !features.handRaise ||
+      !websocket?.isConnected ||
+      !identityRef.current
+    ) {
+      console.warn(
+        "Cannot lower hand - missing requirements or feature disabled"
+      );
       return;
     }
 
     websocket.lowerHand(roomName, identityRef.current);
     setIsHandRaised(false);
+    onHandLowered?.();
     addNotification({
       type: "info",
       message: "Hand lowered",
       duration: 2000,
     });
-  }, [websocket, roomName, addNotification]);
+  }, [websocket, roomName, addNotification, features.handRaise, onHandLowered]);
 
   // Monitor track states
   const updateTrackStates = useCallback(() => {
     if (!p.localParticipant) return;
 
-    const micPublication = p.localParticipant.getTrackPublication(Track.Source.Microphone);
-    const cameraPublication = p.localParticipant.getTrackPublication(Track.Source.Camera);
-    const screenSharePublication = p.localParticipant.getTrackPublication(Track.Source.ScreenShare);
+    const micPublication = p.localParticipant.getTrackPublication(
+      Track.Source.Microphone
+    );
+    const cameraPublication = p.localParticipant.getTrackPublication(
+      Track.Source.Camera
+    );
+    const screenSharePublication = p.localParticipant.getTrackPublication(
+      Track.Source.ScreenShare
+    );
 
     const newMicState = micPublication ? !micPublication.isMuted : false;
-    const newCameraState = cameraPublication ? !cameraPublication.isMuted : false;
-    const newScreenShareState = screenSharePublication ? !screenSharePublication.isMuted : false;
+    const newCameraState = cameraPublication
+      ? !cameraPublication.isMuted
+      : false;
+    const newScreenShareState = screenSharePublication
+      ? !screenSharePublication.isMuted
+      : false;
 
     if (newMicState !== isMicEnabled) setIsMicEnabled(newMicState);
     if (newCameraState !== isCameraEnabled) setIsCameraEnabled(newCameraState);
-    if (newScreenShareState !== isScreenSharingEnabled) setIsScreenSharingEnabled(newScreenShareState);
-  }, [p.localParticipant, isMicEnabled, isCameraEnabled, isScreenSharingEnabled]);
+    if (newScreenShareState !== isScreenSharingEnabled)
+      setIsScreenSharingEnabled(newScreenShareState);
+  }, [
+    p.localParticipant,
+    isMicEnabled,
+    isCameraEnabled,
+    isScreenSharingEnabled,
+  ]);
 
   // Set up track event listeners
   useEffect(() => {
@@ -319,23 +489,27 @@ const BaseCallControls = ({
 
   // Auto-lower hand when unmuting in meetings
   useEffect(() => {
-    if (!p.localParticipant || streamMetadata.streamSessionType !== "meeting") return;
+    if (
+      !p.localParticipant ||
+      streamMetadata?.streamSessionType !== "meeting" ||
+      !features.handRaise
+    )
+      return;
 
     const handleTrackUnmuted = (publication: TrackPublication) => {
-      // When microphone is unmuted and hand is raised, automatically lower it
       if (publication.source === Track.Source.Microphone && isHandRaised) {
-        // Use setTimeout to ensure state updates have propagated
         setTimeout(() => {
           lowerHand();
         }, 100);
       }
     };
 
-    // Also handle track publication changes
     const handleTrackPublished = (publication: TrackPublication) => {
-      if (publication.source === Track.Source.Microphone && 
-          !publication.isMuted && 
-          isHandRaised) {
+      if (
+        publication.source === Track.Source.Microphone &&
+        !publication.isMuted &&
+        isHandRaised
+      ) {
         setTimeout(() => {
           lowerHand();
         }, 100);
@@ -349,57 +523,63 @@ const BaseCallControls = ({
       p.localParticipant.off("trackUnmuted", handleTrackUnmuted);
       p.localParticipant.off("trackPublished", handleTrackPublished);
     };
-  }, [p.localParticipant, streamMetadata.streamSessionType, isHandRaised, lowerHand]);
+  }, [
+    p.localParticipant,
+    streamMetadata?.streamSessionType,
+    isHandRaised,
+    lowerHand,
+    features.handRaise,
+  ]);
 
   // Control functions
   const requestToSpeak = useCallback(() => {
-    if (!websocket?.isConnected || !identityRef.current || !publicKey) {
-      console.warn("Cannot request to speak - missing requirements");
+    if (
+      !features.guestRequests ||
+      !websocket?.isConnected ||
+      !identityRef.current ||
+      !publicKey
+    ) {
+      console.warn(
+        "Cannot request to speak - missing requirements or feature disabled"
+      );
       return;
     }
 
-    // Get the display name from nickname or participant metadata
-    let displayName = nickname || identityRef.current;
-    
-    // Try to get username from participant metadata
-    if (p.localParticipant?.metadata) {
-      try {
-        const metadata = JSON.parse(p.localParticipant.metadata);
-        displayName = metadata.userName || displayName;
-      } catch (e) {
-        console.error("Failed to parse participant metadata:", e);
-      }
-    }
+    const displayName = getDisplayName();
 
     websocket.requestToSpeak(
       roomName,
       identityRef.current,
-      displayName, // Use display name instead of identity
+      displayName,
       publicKey.toString()
     );
     setHasPendingRequest(true);
     onRaiseHand?.();
-  }, [websocket, roomName, publicKey, nickname, p.localParticipant?.metadata, onRaiseHand]);
+  }, [
+    websocket,
+    roomName,
+    publicKey,
+    getDisplayName,
+    onRaiseHand,
+    features.guestRequests,
+  ]);
 
   // Raise hand function for meetings
   const raiseHand = useCallback(() => {
-    if (!websocket?.isConnected || !identityRef.current || !publicKey || !canRaiseHand) {
-      console.warn("Cannot raise hand - missing requirements or not in meeting");
+    if (
+      !features.handRaise ||
+      !websocket?.isConnected ||
+      !identityRef.current ||
+      !publicKey ||
+      !permissions.canRaiseHand
+    ) {
+      console.warn(
+        "Cannot raise hand - missing requirements, not in meeting, or feature disabled"
+      );
       return;
     }
 
-    // Get the display name
-    let displayName = nickname || identityRef.current;
-    
-    // Try to get username from participant metadata
-    if (p.localParticipant?.metadata) {
-      try {
-        const metadata = JSON.parse(p.localParticipant.metadata);
-        displayName = metadata.userName || displayName;
-      } catch (e) {
-        console.error("Failed to parse participant metadata:", e);
-      }
-    }
+    const displayName = getDisplayName();
 
     websocket.raiseHand(
       roomName,
@@ -408,16 +588,31 @@ const BaseCallControls = ({
       publicKey.toString()
     );
     setIsHandRaised(true);
+    onHandRaised?.();
     addNotification({
       type: "info",
       message: "Hand raised",
       duration: 2000,
     });
-  }, [websocket, roomName, publicKey, nickname, canRaiseHand, p.localParticipant?.metadata, addNotification]);
+  }, [
+    websocket,
+    roomName,
+    publicKey,
+    getDisplayName,
+    permissions.canRaiseHand,
+    addNotification,
+    features.handRaise,
+    onHandRaised,
+  ]);
 
   const toggleMic = useCallback(() => {
-    const publication = p.localParticipant?.getTrackPublication(Track.Source.Microphone);
+    if (!features.media || !permissions.canToggleMic) return;
+
+    const publication = p.localParticipant?.getTrackPublication(
+      Track.Source.Microphone
+    );
     if (publication) {
+      const newState = publication.isMuted;
       if (publication.isMuted) {
         publication.unmute();
         setIsMicEnabled(true);
@@ -425,12 +620,23 @@ const BaseCallControls = ({
         publication.mute();
         setIsMicEnabled(false);
       }
+      onMicToggle?.(newState);
     }
-  }, [p.localParticipant]);
+  }, [
+    p.localParticipant,
+    features.media,
+    permissions.canToggleMic,
+    onMicToggle,
+  ]);
 
   const toggleCamera = useCallback(() => {
-    const publication = p.localParticipant?.getTrackPublication(Track.Source.Camera);
+    if (!features.media || !permissions.canToggleCamera) return;
+
+    const publication = p.localParticipant?.getTrackPublication(
+      Track.Source.Camera
+    );
     if (publication) {
+      const newState = publication.isMuted;
       if (publication.isMuted) {
         publication.unmute();
         setIsCameraEnabled(true);
@@ -438,12 +644,23 @@ const BaseCallControls = ({
         publication.mute();
         setIsCameraEnabled(false);
       }
+      onCameraToggle?.(newState);
     }
-  }, [p.localParticipant]);
+  }, [
+    p.localParticipant,
+    features.media,
+    permissions.canToggleCamera,
+    onCameraToggle,
+  ]);
 
   const toggleScreenShare = useCallback(() => {
-    const publication = p.localParticipant?.getTrackPublication(Track.Source.ScreenShare);
+    if (!features.screenShare || !permissions.canScreenShare) return;
+
+    const publication = p.localParticipant?.getTrackPublication(
+      Track.Source.ScreenShare
+    );
     if (publication) {
+      const newState = publication.isMuted;
       if (publication.isMuted) {
         publication.unmute();
         setIsScreenSharingEnabled(true);
@@ -451,24 +668,45 @@ const BaseCallControls = ({
         publication.mute();
         setIsScreenSharingEnabled(false);
       }
+      onScreenShareToggle?.(newState);
     }
-  }, [p.localParticipant]);
+  }, [
+    p.localParticipant,
+    features.screenShare,
+    permissions.canScreenShare,
+    onScreenShareToggle,
+  ]);
 
   const toggleRecording = useCallback(() => {
+    if (!features.recording || !permissions.canRecord) return;
+
     const newState = !isRecording;
     setIsRecording(newState);
-    onRecordToggle?.();
-    
+    onRecordToggle?.(newState);
+
     addNotification({
       type: newState ? "success" : "info",
       message: newState ? "Recording started" : "Recording stopped",
       duration: 3000,
     });
-  }, [isRecording, onRecordToggle, addNotification]);
+  }, [
+    isRecording,
+    onRecordToggle,
+    addNotification,
+    features.recording,
+    permissions.canRecord,
+  ]);
 
   const handleDisconnectClick = async () => {
+    if (!features.disconnect) return;
+
+    // Allow cancellation via beforeDisconnect
+    if (beforeDisconnect) {
+      const shouldDisconnect = await beforeDisconnect();
+      if (!shouldDisconnect) return;
+    }
+
     try {
-      // console.log("End call button clicked - disconnecting");
       await leaveStream();
       onDisconnect?.();
       setToken(undefined);
@@ -478,31 +716,106 @@ const BaseCallControls = ({
     }
   };
 
-  if (render) {
-    return render({
-      isInvited,
-      hasPendingRequest,
-      canAccessMediaControls,
-      isGuest,
-      isMicEnabled,
-      isCameraEnabled,
-      isScreenSharingEnabled,
-      isRecording,
-      handleDisconnectClick,
-      toggleMic,
-      toggleCamera,
-      toggleScreenShare,
-      toggleRecording,
-      requestToSpeak,
-      userType: userType || "guest",
-      isHandRaised,
-      canRaiseHand,
-      raiseHand,
-      lowerHand,
-    });
-  }
+  // Utility functions
+  const formatDuration = (seconds: number): string => {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
 
-  return null;
+    if (hours > 0) {
+      return `${hours}:${minutes.toString().padStart(2, "0")}:${secs
+        .toString()
+        .padStart(2, "0")}`;
+    }
+    return `${minutes}:${secs.toString().padStart(2, "0")}`;
+  };
+
+  const sortCustomActions = (actions: CustomAction[]): CustomAction[] => {
+    return [...actions].sort((a, b) => {
+      // Sort by position if specified
+      if (a.position === "start" && b.position !== "start") return -1;
+      if (a.position !== "start" && b.position === "start") return 1;
+      if (a.position === "end" && b.position !== "end") return 1;
+      if (a.position !== "end" && b.position === "end") return -1;
+
+      // Sort by numeric position
+      if (typeof a.position === "number" && typeof b.position === "number") {
+        return a.position - b.position;
+      }
+
+      // Sort by group
+      const groupOrder = { primary: 0, secondary: 1, danger: 2 };
+      const aGroup = a.group || "secondary";
+      const bGroup = b.group || "secondary";
+      return groupOrder[aGroup] - groupOrder[bGroup];
+    });
+  };
+
+  // Get participant count
+  const participantCount = room?.remoteParticipants?.size
+    ? room.remoteParticipants.size + 1
+    : 1;
+
+  // Build render props
+  const renderProps: CallControlsRenderProps = {
+    // States
+    isInvited,
+    hasPendingRequest,
+    isRecording,
+    isHandRaised,
+
+    // Connection states
+    isConnecting,
+    connectionQuality,
+
+    // Permissions
+    canAccessMediaControls,
+    canRaiseHand: permissions.canRaiseHand,
+    canRecord: permissions.canRecord,
+    canScreenShare: permissions.canScreenShare,
+    canInviteGuests: permissions.canInviteGuests,
+    permissions,
+
+    // User info
+    userType: userType || "guest",
+    isGuest,
+    identity: identityRef.current || "",
+    displayName: getDisplayName(),
+
+    // Track states
+    isMicEnabled,
+    isCameraEnabled,
+    isScreenSharingEnabled,
+
+    // Actions - only included if feature is enabled
+    ...(features.media && { toggleMic, toggleCamera }),
+    ...(features.screenShare && { toggleScreenShare }),
+    ...(features.recording && { toggleRecording }),
+    ...(features.guestRequests && { requestToSpeak }),
+    ...(features.handRaise && { raiseHand, lowerHand }),
+    ...(features.disconnect && { handleDisconnectClick }),
+
+    // Custom actions
+    customActions,
+
+    // Room info
+    roomName,
+    streamSessionType: streamMetadata?.streamSessionType,
+    participantCount,
+
+    // Utility functions
+    utils: {
+      formatDuration,
+      getParticipantDisplayName: getDisplayName,
+      sortCustomActions,
+    },
+
+    // Plugin states and handlers
+    pluginStates,
+    pluginHandlers,
+  };
+
+  return render(renderProps);
 };
 
 export default BaseCallControls;

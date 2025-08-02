@@ -3,7 +3,7 @@ import { useStreamContext } from "../hooks";
 import StreamContainer from "./stream-container";
 
 type StreamViewProps = {
-  children?: React.ReactNode;
+  children: React.ReactNode;
 };
 
 const StreamView = ({ children }: StreamViewProps) => {

@@ -119,7 +119,7 @@ export const TenantProvider = ({
     };
   }, [connect, disconnect]);
 
-  // Fetch tenant data
+  // Fetch tenant data once and store in local storage
   useEffect(() => {
     const fetchTenantData = async () => {
       setIsLoading(true);
