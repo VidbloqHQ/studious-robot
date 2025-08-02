@@ -1,14 +1,17 @@
 import { useState, useEffect, useRef } from "react";
-import { useStreamContext } from "../hooks";
-import { GuestRequest } from "../types";
+import { useStreamContext } from "../../hooks";
+import { GuestRequest } from "../../types";
 import CallControls from "./call-controls";
 // import { Icon } from "./icons";
-import Livestream from "./livestream";
-import Meeting from "./meeting-classic";
+import Livestream from "./livestream-classic";
+// import Meeting from "./meeting-classic";
+import Meeting from "./meeting";
 import RaisedHandCard from "./raised-hand";
 import RequestCard from "./request-card";
 import Prejoin from "./prejoin";
-import { WebSocketDebugger } from "./WebSocketDebugger";
+import ContestModeTest from "./contest-test";
+// import AddonTestSuite from "./addon-testing";
+import { WebSocketDebugger } from "../WebSocketDebugger";
 
 const UserView = () => {
   const {
@@ -116,22 +119,23 @@ const UserView = () => {
       prev.filter((req) => req.participantId !== participantId)
     );
   };
-   if (!token) {
+  if (!token) {
     return <Prejoin />;
   }
   return (
     <>
       {streamMetadata?.streamSessionType === "meeting" ? (
-        <Meeting />
+        <Meeting setShowParticipantList={() => {alert("Show participant list");}} />
       ) : (
         <Livestream />
       )}
+      <ContestModeTest />
       <div className="w-[90%] lg:w-[80%] mx-auto">
         <CallControls />
       </div>
       <WebSocketDebugger />
       {userType === "host" && (
-        <div className="absolute right-10 top-20 bg-red-300 rounded">
+        <div className="absolute right-10 top-20 rounded">
           {localGuestRequests.length > 0 &&
             localGuestRequests.map((request, i) => (
               <RequestCard
@@ -156,6 +160,7 @@ const UserView = () => {
             ))}
           </div>
         )}
+      {/* <AddonTestSuite /> */}
     </>
   );
 };
