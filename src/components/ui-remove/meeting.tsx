@@ -513,10 +513,10 @@ export default function MeetingView({ setShowParticipantList }: MeetingViewProps
 
   // Get max visible participants based on screen size
   const getMaxVisibleParticipants = () => {
-    if (meeting.screenSize === "xs" || meeting.screenSize === "sm") return 12;
-    if (meeting.screenSize === "md") return 3;
-    if (meeting.screenSize === "lg") return 3;
-    return 3; // xl
+    if (meeting.screenSize === "xs" || meeting.screenSize === "sm") return 2;
+    if (meeting.screenSize === "md") return 2;
+    if (meeting.screenSize === "lg") return 2;
+    return 2; // xl
   };
 
   // Get sorted participants with active speaker priority
