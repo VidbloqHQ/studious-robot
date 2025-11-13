@@ -222,73 +222,15 @@ export const CameraControl: React.FC<CameraControlProps> = ({
  * Modern UI style (formerly variant='modern')
  */
 export const ScreenShareControl: React.FC<MediaControlProps> = (
-//   {
-//   className = "",
-//   style,
-//   showLabel = true,
-//   labelText = "Screen",
-//   onChange,
-//   icon,
-// }
 ) => {
-  // const [isEnabled, setIsEnabled] = useState(false);
-  
-  // const handleChange = (enabled: boolean) => {
-  //   setIsEnabled(enabled);
-  //   if (onChange) {
-  //     onChange(enabled);
-  //   }
-  // };
-  
   return (
-    // <div className={`bg-white p-0.5 rounded-2xl cursor-pointer h-[44px] w-[44px] ${className}`} style={style}>
-    //   <TrackToggle
-    //     source={Track.Source.ScreenShare}
-    //     showIcon={false}
-    //     onChange={handleChange}
-    //   >
-    //     <div className={`${isEnabled ? 'bg-gradient-to-t from-[#DCCCF6] to-primary' : 'bg-[#DCCCF63D]'} rounded-2xl h-full flex flex-col items-center justify-center`}>
-    //       {isEnabled ? 
-    //         (icon?.enabled || <Icon name="screen" className="text-white" />) : 
-    //         (icon?.disabled || <Icon name="screen" className="text-primary" />)
-    //       }
-    //     </div>
-    //   </TrackToggle>
-    //   {showLabel && <span className="text-xs text-center mt-1 block">{labelText}</span>}
-    // </div>
     <TrackToggle source={Track.Source.ScreenShare} showIcon={false}>
     <div className="bg-[var(--sdk-bg-primary-color)] p-0.5 rounded-2xl cursor-pointer h-[44px] w-[44px]">
       <div className="bg-gradient-to-t from-[#DCCCF6] to-bg-primary rounded-2xl h-full flex flex-col items-center justify-center">
-        <Icon name="screen" className="text-primary" />
+        <Icon name="screen" className="text-primary" size={22}/>
       </div>
     </div>
   </TrackToggle>
-  );
-};
-
-/**
- * RecordControl component for toggling recording
- */
-export const RecordControl: React.FC<MediaControlProps & { isRecording: boolean; toggleRecording: () => void }> = ({
-  className = "",
-  style,
-  showLabel = true,
-  labelText = "Record",
-  isRecording,
-  toggleRecording,
-}) => {
-  return (
-    <div 
-      className={`rounded-2xl p-0.5 bg-primary flex flex-row text-white items-center gap-x-2 cursor-pointer ${className}`}
-      style={style}
-      onClick={toggleRecording}
-    >
-      <span className="ml-2">{isRecording ? "Stop" : labelText}</span>
-      <div className={`rounded-2xl ${isRecording ? "bg-[#FF5555]" : "bg-[#8B55E2]"} p-2`}>
-        <Icon name="record" className="text-white" />
-      </div>
-      {showLabel && <span className="text-xs text-center mt-1 block">{labelText}</span>}
-    </div>
   );
 };
 
