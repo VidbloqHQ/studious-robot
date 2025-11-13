@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { SDKParticipant, EnhancedSDKParticipant } from '../types';
 import {
   getParticipantTrackStates,
@@ -25,6 +25,9 @@ export function useParticipantTrackStates(
     };
   });
 
+  // Use ref to track participant identity for stability check
+  const participantIdentityRef = useRef(participant.identity);
+
   useEffect(() => {
     // If no LiveKit reference, we can't track changes
     if (!('_livekitParticipant' in participant) || !participant._livekitParticipant) {
@@ -33,10 +36,21 @@ export function useParticipantTrackStates(
 
     const enhancedParticipant = participant as EnhancedSDKParticipant;
 
-    // Update track states
+    // Update track states with comparison to prevent unnecessary updates
     const updateTrackStates = () => {
       const newStates = getParticipantTrackStates(enhancedParticipant);
-      setTrackStates(newStates);
+      
+      setTrackStates(prevStates => {
+        // Only update if states actually changed
+        if (
+          prevStates.micEnabled === newStates.micEnabled &&
+          prevStates.cameraEnabled === newStates.cameraEnabled &&
+          prevStates.hasLivekitReference === newStates.hasLivekitReference
+        ) {
+          return prevStates; // No update needed, return same reference
+        }
+        return newStates;
+      });
     };
 
     // Set up event listeners
@@ -66,14 +80,22 @@ export function useParticipantTrackStates(
       );
     }
 
-    // Initial update to ensure we have the latest state
-    updateTrackStates();
+    // Defer initial update to avoid synchronous state updates during render
+    const timeoutId = setTimeout(() => {
+      updateTrackStates();
+    }, 0);
 
     // Cleanup
     return () => {
+      clearTimeout(timeoutId);
       cleanupFunctions.forEach(cleanup => cleanup());
     };
-  }, [participant, isLocal]);
+  }, [participant.identity, participant.sid, isLocal]); // Use stable identity/sid instead of whole object
+
+  // Update ref when participant changes
+  useEffect(() => {
+    participantIdentityRef.current = participant.identity;
+  }, [participant.identity]);
 
   return trackStates;
 }
@@ -85,22 +107,44 @@ export function useParticipantTrackStates(
 export function useAllParticipantTrackStates(
   participants: Array<SDKParticipant | EnhancedSDKParticipant>
 ) {
-  const [participantStates, setParticipantStates] = useState<
-    Map<string, { micEnabled: boolean; cameraEnabled: boolean }>
-  >(new Map());
-
-  useEffect(() => {
-    const newStates = new Map<string, { micEnabled: boolean; cameraEnabled: boolean }>();
-
+  const [participantStates, setParticipantStates] = useState<Map<string, { micEnabled: boolean; cameraEnabled: boolean }>>(() => {
+    // Initialize with current states
+    const initialStates = new Map<string, { micEnabled: boolean; cameraEnabled: boolean }>();
     participants.forEach(participant => {
       const states = getParticipantTrackStates(participant);
-      newStates.set(participant.identity, {
+      initialStates.set(participant.identity, {
         micEnabled: states.micEnabled,
         cameraEnabled: states.cameraEnabled,
       });
     });
+    return initialStates;
+  });
 
-    setParticipantStates(newStates);
+  // Track participant identities to detect changes
+  const participantIdentitiesRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    const currentIdentities = new Set(participants.map(p => p.identity));
+    const previousIdentities = participantIdentitiesRef.current;
+
+    // Check if participants have actually changed
+    const hasChanged = currentIdentities.size !== previousIdentities.size ||
+      [...currentIdentities].some(id => !previousIdentities.has(id));
+
+    if (hasChanged) {
+      const newStates = new Map<string, { micEnabled: boolean; cameraEnabled: boolean }>();
+
+      participants.forEach(participant => {
+        const states = getParticipantTrackStates(participant);
+        newStates.set(participant.identity, {
+          micEnabled: states.micEnabled,
+          cameraEnabled: states.cameraEnabled,
+        });
+      });
+
+      setParticipantStates(newStates);
+      participantIdentitiesRef.current = currentIdentities;
+    }
   }, [participants]);
 
   // Set up listeners for all participants with LiveKit references
@@ -116,7 +160,19 @@ export function useAllParticipantTrackStates(
 
       const updateParticipantState = () => {
         const states = getParticipantTrackStates(enhancedParticipant);
+        
         setParticipantStates(prev => {
+          const currentState = prev.get(participant.identity);
+          
+          // Only update if state actually changed
+          if (
+            currentState &&
+            currentState.micEnabled === states.micEnabled &&
+            currentState.cameraEnabled === states.cameraEnabled
+          ) {
+            return prev; // No change, return same reference
+          }
+          
           const newMap = new Map(prev);
           newMap.set(participant.identity, {
             micEnabled: states.micEnabled,

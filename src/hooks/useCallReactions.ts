@@ -1,5 +1,8 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useStreamContext } from "./useStreamContext";
+import { useTenantContext } from "./useTenantContext";
+import { useRequirePublicKey } from "./useRequirePublicKey";
 
 interface ReactionData {
   reaction: string;
@@ -18,30 +21,23 @@ interface PendingReaction {
 export const useCallReactions = () => {
   const [reactions, setReactions] = useState<ReactionData[]>([]);
   const { websocket, roomName, identity } = useStreamContext();
+  const { isConnected } = useTenantContext();
   const reactionTimeouts = useRef<Map<string, NodeJS.Timeout>>(new Map());
-  const isConnectedRef = useRef(false);
-  const eventListenerRegistered = useRef(false);
   const pendingReactions = useRef<Map<string, PendingReaction>>(new Map());
   const joinedRoom = useRef(false);
-
-  // Track connection state
-  useEffect(() => {
-    isConnectedRef.current = websocket?.isConnected || false;
-  }, [websocket?.isConnected]);
+  const { publicKey } = useRequirePublicKey();
 
   // Ensure we're properly joined to the room
   useEffect(() => {
-    if (websocket?.isConnected && roomName && identity && !joinedRoom.current) {
-      websocket.joinRoom(roomName, identity);
+    if (isConnected && roomName && identity && !joinedRoom.current) {
+      websocket.joinRoom(roomName, identity, publicKey?.toString());
       joinedRoom.current = true;
     }
-  }, [websocket?.isConnected, roomName, identity]);
+  }, [isConnected, roomName, identity, websocket]);
 
   // Set up WebSocket event listeners for reactions
   useEffect(() => {
-    if (!websocket || !roomName || eventListenerRegistered.current) return;
-
-    eventListenerRegistered.current = true;
+    if (!websocket || !roomName) return;
 
     // Handle incoming reactions
     const handleReceiveReaction = (data: ReactionData) => {
@@ -57,7 +53,6 @@ export const useCallReactions = () => {
         id: data.id || `${data.reaction}-${data.sender}-${Date.now()}-${Math.random()}`,
         roomName: data.roomName || roomName
       };
-      
       
       // Add the new reaction to the array
       setReactions((prev) => {
@@ -108,23 +103,16 @@ export const useCallReactions = () => {
 
     // Add event listeners
     websocket.addEventListener("receiveReaction", handleReceiveReaction);
-    websocket.addEventListener("connect", handleConnect);
-    websocket.addEventListener("disconnect", handleDisconnect);
-    
-    // Also listen for WebSocket reconnection events
-    window.addEventListener("connect", handleConnect);
-
+    websocket.addEventListener("connected", handleConnect);
+    websocket.addEventListener("disconnected", handleDisconnect);
 
     // Clean up event listeners and timeouts on unmount
     return () => {
       if (websocket) {
         websocket.removeEventListener("receiveReaction", handleReceiveReaction);
-        websocket.removeEventListener("connect", handleConnect);
-        websocket.removeEventListener("disconnect", handleDisconnect);
+        websocket.removeEventListener("connected", handleConnect);
+        websocket.removeEventListener("disconnected", handleDisconnect);
       }
-      window.removeEventListener("connect", handleConnect);
-      eventListenerRegistered.current = false;
-      joinedRoom.current = false;
       
       // Clear all timeouts
       reactionTimeouts.current.forEach(timeout => clearTimeout(timeout));
@@ -136,7 +124,7 @@ export const useCallReactions = () => {
       });
       pendingReactions.current.clear();
     };
-  }, [websocket, roomName, identity]);
+  }, [websocket, roomName]);
 
   // Internal function to send reaction with retry logic
   const sendReactionInternal = useCallback((reactionData: ReactionData) => {
@@ -202,9 +190,8 @@ export const useCallReactions = () => {
         roomName
       };
 
-
       // Check connection state
-      if (!websocket.isConnected) {
+      if (!isConnected) {
         console.warn("WebSocket not connected, queueing reaction for retry");
         
         // Queue the reaction for sending when connected
@@ -213,21 +200,13 @@ export const useCallReactions = () => {
           retryCount: 0
         });
         
-        // Try to reconnect
-        try {
-          await websocket.connect();
-          // Connection handler will resend pending reactions
-        } catch (error) {
-          console.error("Failed to reconnect WebSocket:", error);
-          return false;
-        }
-        
+        // Connection will be handled by singleton
         return true; // Optimistically return true as it will be retried
       }
 
       // Ensure we're in the room
       if (!joinedRoom.current && identity) {
-        websocket.joinRoom(roomName, identity);
+        websocket.joinRoom(roomName, identity, publicKey?.toString());
         joinedRoom.current = true;
         
         // Wait a bit for join to process
@@ -239,19 +218,8 @@ export const useCallReactions = () => {
       
       return true;
     },
-    [websocket, roomName, identity, sendReactionInternal]
+    [websocket, roomName, identity, sendReactionInternal, isConnected]
   );
-
-  // Periodic connection check
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (websocket?.isConnected && !eventListenerRegistered.current) {
-        eventListenerRegistered.current = false; // Force re-registration
-      }
-    }, 5000);
-
-    return () => clearInterval(interval);
-  }, [websocket]);
 
   // Clear reactions on unmount to prevent memory leaks
   useEffect(() => {
@@ -269,6 +237,6 @@ export const useCallReactions = () => {
   return { 
     reactions, 
     sendReaction,
-    isConnected: isConnectedRef.current 
+    isConnected
   };
 };

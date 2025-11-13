@@ -1,6 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useTenantContext } from './useTenantContext';
+import { useStreamContext } from './useStreamContext';
+import { getRequestManager } from '../utils/index';
+import { useLiveData } from './useLiveData';
 
 interface QuizAnswer {
   questionId: string;
@@ -13,6 +16,7 @@ interface SubmitQuizAnswersRequest {
   wallet: string;
   answers: QuizAnswer[];
   totalScore: number;
+  streamId?: string;
 }
 
 interface SubmitQuizAnswersResponse {
@@ -28,24 +32,15 @@ interface UseSubmitQuizAnswersReturn {
   response: SubmitQuizAnswersResponse | null;
 }
 
-/**
- * Hook for submitting answers to a quiz
- * @returns Object containing submitQuizAnswers function, loading state, error state, and response data
- */
 export const useSubmitQuizAnswers = (): UseSubmitQuizAnswersReturn => {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<Error | null>(null);
   const [response, setResponse] = useState<SubmitQuizAnswersResponse | null>(null);
   
-  // Get the API client from context
   const { apiClient } = useTenantContext();
+  const { streamMetadata: { streamId } } = useStreamContext();
+  const requestManager = getRequestManager();
 
-  /**
-   * Submit answers to a quiz
-   * @param agendaId - ID of the quiz agenda
-   * @param data - Quiz answers data including wallet, answers array, and total score
-   * @returns Response data or null if an error occurred
-   */
   const submitQuizAnswers = async (
     agendaId: string, 
     data: SubmitQuizAnswersRequest
@@ -73,17 +68,28 @@ export const useSubmitQuizAnswers = (): UseSubmitQuizAnswersReturn => {
     setIsLoading(true);
     setError(null);
     
+    const payload = {
+      ...data, streamId
+    }
     try {
-      // Use the API client to make the POST request to the /quiz/:agendaId endpoint
-      const submitResponse = await apiClient.post<SubmitQuizAnswersResponse>(
-        `/quiz/${agendaId}`, 
-        data
+      const submitResponse = await requestManager.execute<SubmitQuizAnswersResponse>(
+        `quiz:submit:${agendaId}:${Date.now()}`,
+        async () => apiClient.post<SubmitQuizAnswersResponse>(`/quiz/${agendaId}`, payload),
+        {
+          skipCache: true,
+          rateLimitType: 'default'
+        }
       );
+      
+      // Invalidate related quiz caches
+      requestManager.invalidate(`quiz:${agendaId}`);
+      requestManager.invalidate(`quiz:results:${agendaId}`);
+      requestManager.invalidate(`quiz:answers:${agendaId}:${data.wallet}`);
       
       setResponse(submitResponse);
       return submitResponse;
     } catch (err: any) {
-      const errorMessage = err.response?.data?.error || 'An unknown error occurred';
+      const errorMessage = err.response?.data?.error || err.message || 'An unknown error occurred';
       setError(new Error(errorMessage));
       return null;
     } finally {
@@ -99,7 +105,6 @@ export const useSubmitQuizAnswers = (): UseSubmitQuizAnswersReturn => {
   };
 };
 
-
 interface QuizQuestion {
   id: string;
   questionText: string;
@@ -113,6 +118,7 @@ interface QuizQuestionsResponse {
   id: string;
   title: string | null;
   description: string | null;
+  duration: string | null;
   questions: QuizQuestion[];
 }
 
@@ -121,26 +127,21 @@ interface UseGetQuizQuestionsReturn {
   isLoading: boolean;
   error: Error | null;
   quiz: QuizQuestionsResponse | null;
+  refresh: (agendaId: string) => Promise<QuizQuestionsResponse | null>;
 }
 
-/**
- * Hook for fetching quiz questions
- * @returns Object containing getQuizQuestions function, loading state, error state, and quiz data
- */
 export const useGetQuizQuestions = (): UseGetQuizQuestionsReturn => {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<Error | null>(null);
   const [quiz, setQuiz] = useState<QuizQuestionsResponse | null>(null);
   
-  // Get the API client from context
   const { apiClient } = useTenantContext();
+  const requestManager = getRequestManager();
 
-  /**
-   * Get questions for a quiz
-   * @param agendaId - ID of the quiz agenda
-   * @returns Quiz questions or null if an error occurred
-   */
-  const getQuizQuestions = async (agendaId: string): Promise<QuizQuestionsResponse | null> => {
+  const fetchQuizQuestions = useCallback(async (
+    agendaId: string,
+    forceRefresh = false
+  ): Promise<QuizQuestionsResponse | null> => {
     if (!agendaId) {
       setError(new Error('Agenda ID is required'));
       return null;
@@ -149,29 +150,51 @@ export const useGetQuizQuestions = (): UseGetQuizQuestionsReturn => {
     setIsLoading(true);
     setError(null);
     
+    const cacheKey = `quiz:${agendaId}`;
+    
     try {
-      // Use the API client to make the GET request to the /quiz/:agendaId endpoint
-      const quizData = await apiClient.get<QuizQuestionsResponse>(`/quiz/${agendaId}`);
+      const quizData = await requestManager.execute<QuizQuestionsResponse>(
+        cacheKey,
+        async () => apiClient.get<QuizQuestionsResponse>(`/quiz/${agendaId}`),
+        {
+          cacheType: 'default',
+          forceRefresh,
+          rateLimitType: 'default',
+        }
+      );
       
       setQuiz(quizData);
       return quizData;
     } catch (err: any) {
-      const errorMessage = err.response?.data?.error || 'An unknown error occurred';
+      if (err.message?.includes('Rate limit exceeded') && quiz) {
+        console.warn('Rate limit hit for quiz questions, using cached data');
+        return quiz;
+      }
+      
+      const errorMessage = err.response?.data?.error || err.message || 'An unknown error occurred';
       setError(new Error(errorMessage));
       return null;
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [apiClient, requestManager, quiz]);
+
+  const getQuizQuestions = useCallback((agendaId: string) => {
+    return fetchQuizQuestions(agendaId, false);
+  }, [fetchQuizQuestions]);
+
+  const refresh = useCallback((agendaId: string) => {
+    return fetchQuizQuestions(agendaId, true);
+  }, [fetchQuizQuestions]);
 
   return {
     getQuizQuestions,
     isLoading,
     error,
     quiz,
+    refresh,
   };
 };
-
 
 interface QuestionStat {
   id: string;
@@ -206,26 +229,21 @@ interface UseGetQuizResultsReturn {
   isLoading: boolean;
   error: Error | null;
   results: QuizResultsResponse | null;
+  refresh: (agendaId: string) => Promise<QuizResultsResponse | null>;
 }
 
-/**
- * Hook for fetching quiz results
- * @returns Object containing getQuizResults function, loading state, error state, and results data
- */
 export const useGetQuizResults = (): UseGetQuizResultsReturn => {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<Error | null>(null);
   const [results, setResults] = useState<QuizResultsResponse | null>(null);
   
-  // Get the API client from context
   const { apiClient } = useTenantContext();
+  const requestManager = getRequestManager();
 
-  /**
-   * Get results for a quiz
-   * @param agendaId - ID of the quiz agenda
-   * @returns Quiz results or null if an error occurred
-   */
-  const getQuizResults = async (agendaId: string): Promise<QuizResultsResponse | null> => {
+  const fetchQuizResults = useCallback(async (
+    agendaId: string,
+    forceRefresh = false
+  ): Promise<QuizResultsResponse | null> => {
     if (!agendaId) {
       setError(new Error('Agenda ID is required'));
       return null;
@@ -234,29 +252,105 @@ export const useGetQuizResults = (): UseGetQuizResultsReturn => {
     setIsLoading(true);
     setError(null);
     
+    const cacheKey = `quiz:results:${agendaId}`;
+    
     try {
-      // Use the API client to make the GET request to the /quiz/results/:agendaId endpoint
-      const quizResults = await apiClient.get<QuizResultsResponse>(`/quiz/results/${agendaId}`);
+      const quizResults = await requestManager.execute<QuizResultsResponse>(
+        cacheKey,
+        async () => apiClient.get<QuizResultsResponse>(`/quiz/results/${agendaId}`),
+        {
+          cacheType: 'default',
+          forceRefresh,
+          rateLimitType: 'default',
+        }
+      );
       
       setResults(quizResults);
       return quizResults;
     } catch (err: any) {
-      const errorMessage = err.response?.data?.error || 'An unknown error occurred';
+      if (err.message?.includes('Rate limit exceeded') && results) {
+        console.warn('Rate limit hit for quiz results, using cached data');
+        return results;
+      }
+      
+      const errorMessage = err.response?.data?.error || err.message || 'An unknown error occurred';
       setError(new Error(errorMessage));
       return null;
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [apiClient, requestManager, results]);
+
+  const getQuizResults = useCallback((agendaId: string) => {
+    return fetchQuizResults(agendaId, false);
+  }, [fetchQuizResults]);
+
+  const refresh = useCallback((agendaId: string) => {
+    return fetchQuizResults(agendaId, true);
+  }, [fetchQuizResults]);
 
   return {
     getQuizResults,
     isLoading,
     error,
     results,
+    refresh,
   };
 };
 
+interface UseLiveQuizResultsReturn {
+  results: QuizResultsResponse | null;
+  error: Error | null;
+  isLoading: boolean;
+  pause: () => void;
+  resume: () => void;
+  refetch: () => Promise<QuizResultsResponse | null>;
+}
+
+export const useLiveQuizResults = (
+  agendaId: string,
+  options: {
+    enabled?: boolean;
+    interval?: number;
+    onUpdate?: (data: QuizResultsResponse) => void;
+  } = {}
+): UseLiveQuizResultsReturn => {
+  const { apiClient } = useTenantContext();
+  const requestManager = getRequestManager();
+
+  const fetcher = useCallback(async () => {
+    if (!agendaId) {
+      throw new Error('Agenda ID is required');
+    }
+
+    const cacheKey = `quiz:results:${agendaId}`;
+    
+    return requestManager.execute<QuizResultsResponse>(
+      cacheKey,
+      async () => apiClient.get<QuizResultsResponse>(`/quiz/results/${agendaId}`),
+      {
+        cacheType: 'default',
+        rateLimitType: 'default',
+      }
+    );
+  }, [agendaId, apiClient, requestManager]);
+
+  const liveData = useLiveData<QuizResultsResponse>({
+    fetcher,
+    interval: options.interval || 10000, // Poll every 10 seconds by default
+    enabled: options.enabled !== false && !!agendaId,
+    onData: options.onUpdate
+  });
+
+  return {
+    results: liveData.data,
+    error: liveData.error,
+    isLoading: liveData.isLoading,
+    pause: liveData.pause,
+    resume: liveData.resume,
+    refetch: liveData.refetch
+  };
+};
 
 interface QuestionResponse {
   questionId: string;
@@ -284,29 +378,21 @@ interface UseGetUserQuizAnswersReturn {
   isLoading: boolean;
   error: Error | null;
   answers: UserQuizAnswersResponse | null;
+  refresh: (agendaId: string, wallet: string) => Promise<UserQuizAnswersResponse | null>;
 }
 
-/**
- * Hook for fetching a user's answers to a quiz
- * @returns Object containing getUserQuizAnswers function, loading state, error state, and user answers data
- */
 export const useGetUserQuizAnswers = (): UseGetUserQuizAnswersReturn => {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<Error | null>(null);
   const [answers, setAnswers] = useState<UserQuizAnswersResponse | null>(null);
   
-  // Get the API client from context
   const { apiClient } = useTenantContext();
+  const requestManager = getRequestManager();
 
-  /**
-   * Get a user's answers to a quiz
-   * @param agendaId - ID of the quiz agenda
-   * @param wallet - Wallet address of the user
-   * @returns User's quiz answers or null if an error occurred
-   */
-  const getUserQuizAnswers = async (
-    agendaId: string, 
-    wallet: string
+  const fetchUserAnswers = useCallback(async (
+    agendaId: string,
+    wallet: string,
+    forceRefresh = false
   ): Promise<UserQuizAnswersResponse | null> => {
     if (!agendaId) {
       setError(new Error('Agenda ID is required'));
@@ -321,27 +407,48 @@ export const useGetUserQuizAnswers = (): UseGetUserQuizAnswersReturn => {
     setIsLoading(true);
     setError(null);
     
+    const cacheKey = `quiz:answers:${agendaId}:${wallet}`;
+    
     try {
-      // Use the API client to make the GET request to the /quiz/answers/:agendaId endpoint with wallet as query param
-      const userAnswers = await apiClient.get<UserQuizAnswersResponse>(
-        `/quiz/answers/${agendaId}?wallet=${wallet}`,
+      const userAnswers = await requestManager.execute<UserQuizAnswersResponse>(
+        cacheKey,
+        async () => apiClient.get<UserQuizAnswersResponse>(`/quiz/answers/${agendaId}?wallet=${wallet}`),
+        {
+          cacheType: 'default',
+          forceRefresh,
+          rateLimitType: 'default',
+        }
       );
       
       setAnswers(userAnswers);
       return userAnswers;
     } catch (err: any) {
-      const errorMessage = err.response?.data?.error || 'An unknown error occurred';
+      if (err.message?.includes('Rate limit exceeded') && answers) {
+        console.warn('Rate limit hit for user quiz answers, using cached data');
+        return answers;
+      }
+      
+      const errorMessage = err.response?.data?.error || err.message || 'An unknown error occurred';
       setError(new Error(errorMessage));
       return null;
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [apiClient, requestManager, answers]);
+
+  const getUserQuizAnswers = useCallback((agendaId: string, wallet: string) => {
+    return fetchUserAnswers(agendaId, wallet, false);
+  }, [fetchUserAnswers]);
+
+  const refresh = useCallback((agendaId: string, wallet: string) => {
+    return fetchUserAnswers(agendaId, wallet, true);
+  }, [fetchUserAnswers]);
 
   return {
     getUserQuizAnswers,
     isLoading,
     error,
     answers,
+    refresh,
   };
 };

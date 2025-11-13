@@ -3,8 +3,8 @@ import { useStreamContext } from "./useStreamContext";
 import { useTenantContext } from "./useTenantContext";
 
 export const useHandleStreamDisconnect = (publicKey: string) => {
-  const { roomName, websocket, identity } = useStreamContext();
-  const { apiClient } = useTenantContext();
+  const { roomName, websocket, identity, streamMetadata: { streamId } } = useStreamContext();
+  const { apiClient, isConnected } = useTenantContext();
   const disconnectingRef = useRef(false);
   const disconnectCalledTimeRef = useRef<number | null>(null);
   const lastActivityRef = useRef<number>(Date.now());
@@ -14,7 +14,6 @@ export const useHandleStreamDisconnect = (publicKey: string) => {
     const now = Date.now();
     if (disconnectingRef.current || 
         (disconnectCalledTimeRef.current && now - disconnectCalledTimeRef.current < 5000)) {
-      // console.log("Duplicate leave call detected, skipping");
       return;
     }
     
@@ -23,13 +22,10 @@ export const useHandleStreamDisconnect = (publicKey: string) => {
     disconnectCalledTimeRef.current = now;
     
     try {
-      // console.log(`Leaving stream ${roomName} with wallet ${publicKey}`);
-      
       // Only update DB if we have all required info
-      if (roomName && publicKey) {
+      if (streamId && publicKey) {
         try {
-          // console.log(`Updating leftAt for wallet ${publicKey}`);
-          await apiClient.put(`/participant/${roomName}`, {
+          await apiClient.put(`/participant/${streamId}`, {
             wallet: publicKey,
             leftAt: new Date().toISOString(),
           });
@@ -45,14 +41,12 @@ export const useHandleStreamDisconnect = (publicKey: string) => {
         disconnectingRef.current = false;
       }, 5000);
     }
-  }, [publicKey, roomName, apiClient]);
+  }, [publicKey, streamId, apiClient]);
 
   // Handle page close/refresh with sendBeacon
   useEffect(() => {
     const handleBeforeUnload = () => {
-      if (!publicKey || !roomName) return;
-      
-      // console.log("Page unloading - sending beacon");
+      if (!publicKey || !streamId) return;
       
       // Use sendBeacon for reliability
       const formData = new FormData();
@@ -60,7 +54,7 @@ export const useHandleStreamDisconnect = (publicKey: string) => {
       formData.append('leftAt', new Date().toISOString());
       
       // Construct the full URL with query parameter to handle method override
-      const url = `${apiClient['baseUrl']}/participant/${roomName}?method=PUT`;
+      const url = `${apiClient['baseUrl']}/participant/${streamId}?method=PUT`;
       
       // Add headers as query parameters since sendBeacon doesn't support custom headers well
       const beaconUrl = `${url}&x-api-key=${apiClient['apiKey']}&x-api-secret=${apiClient['apiSecret']}`;
@@ -74,7 +68,7 @@ export const useHandleStreamDisconnect = (publicKey: string) => {
         // Fallback to synchronous XHR as last resort
         try {
           const xhr = new XMLHttpRequest();
-          xhr.open('PUT', `${apiClient['baseUrl']}/participant/${roomName}`, false);
+          xhr.open('PUT', `${apiClient['baseUrl']}/participant/${streamId}`, false);
           xhr.setRequestHeader('Content-Type', 'application/json');
           xhr.setRequestHeader('x-api-key', apiClient['apiKey']);
           xhr.setRequestHeader('x-api-secret', apiClient['apiSecret']);
@@ -95,7 +89,7 @@ export const useHandleStreamDisconnect = (publicKey: string) => {
         lastActivityRef.current = Date.now();
         
         // Send activity update through WebSocket
-        if (websocket?.isConnected && identity) {
+        if (isConnected && identity) {
           websocket.sendMessage("participantActive", {
             participantId: identity,
             roomName,
@@ -114,14 +108,14 @@ export const useHandleStreamDisconnect = (publicKey: string) => {
       window.removeEventListener("pagehide", handleBeforeUnload);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [publicKey, roomName, apiClient, websocket, identity]);
+  }, [publicKey, roomName, streamId,apiClient, websocket, identity, isConnected]);
 
   // Send periodic activity signals with better error handling
   useEffect(() => {
-    if (!identity || !roomName || !websocket?.isConnected) return;
+    if (!identity || !roomName || !isConnected) return;
     
     const sendActivity = () => {
-      if (websocket.isConnected) {
+      if (isConnected) {
         try {
           websocket.sendMessage("participantActive", {
             participantId: identity,
@@ -129,8 +123,6 @@ export const useHandleStreamDisconnect = (publicKey: string) => {
             timestamp: Date.now()
           });
           lastActivityRef.current = Date.now();
-          // Remove verbose logging
-          // console.log(`Activity signal sent for ${identity} in ${roomName}`);
         } catch (error) {
           console.error("Failed to send activity signal:", error);
         }
@@ -147,7 +139,7 @@ export const useHandleStreamDisconnect = (publicKey: string) => {
       clearTimeout(initialTimer);
       clearInterval(intervalId);
     };
-  }, [websocket, identity, roomName]);
+  }, [websocket, identity, roomName, isConnected]);
 
   return { leaveStream };
 };

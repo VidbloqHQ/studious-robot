@@ -6,7 +6,6 @@ import {
 import { Room, RoomEvent } from "livekit-client";
 import { Participant } from "../types";
 
-
 // Extend the ReceivedChatMessage to create our FormattedChatMessage
 export interface FormattedChatMessage extends ReceivedChatMessage {
   participant?: Participant;
@@ -100,10 +99,12 @@ export const useCustomChat = (options: ChatOptions): CustomChatHook => {
     };
   }, [room, onMessageReceived]);
   
-  // Helper function to find participant by identity
+  // Helper function to find participant by identity (now using participant.id)
   const findParticipant = useCallback((identity?: string): Participant | undefined => {
     if (!identity) return undefined;
-    return participants.find(p => p.userName === identity || p.id === identity);
+    
+    // Since identity is now participant.id, match by id first
+    return participants.find(p => p.id === identity);
   }, [participants]);
   
   // Parse message content using provided parsers

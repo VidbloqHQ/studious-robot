@@ -31,7 +31,6 @@ export const isMobileDevice = (): boolean => {
  */
 export const initializeCamera = async (audioAlso = false): Promise<boolean> => {
   try {
-    console.log('[Camera Utils] Initializing camera...');
     
     const constraints: MediaStreamConstraints = {
       video: {
@@ -51,7 +50,6 @@ export const initializeCamera = async (audioAlso = false): Promise<boolean> => {
     // Stop all tracks immediately to free them up
     stream.getTracks().forEach(track => track.stop());
     
-    console.log('[Camera Utils] Camera initialized successfully');
     return true;
   } catch (err) {
     console.error('[Camera Utils] Initialization failed:', err);
@@ -66,49 +64,47 @@ export const initializeCamera = async (audioAlso = false): Promise<boolean> => {
 (function applyIOSFixes() {
   // Only apply on iOS
   if (!isIOSBrowser()) return;
-  
-  console.log('[Camera Utils] Applying iOS compatibility fixes...');
-  
+    
   // Fix for devicechange event listener issue
   if (navigator.mediaDevices && !navigator.mediaDevices.addEventListener) {
-    console.log('[Camera Utils] Adding mediaDevices event listener polyfill');
+    // console.log('[Camera Utils] Adding mediaDevices event listener polyfill');
     
     navigator.mediaDevices.addEventListener = function(
-      type: string, 
+      _type: string, 
       _listener: EventListenerOrEventListenerObject, 
       _options?: boolean | AddEventListenerOptions
     ): void {
-      console.log(`[Camera Utils] Ignored event listener for: ${type}`);
+      // console.log(`[Camera Utils] Ignored event listener for: ${type}`);
       return;
     };
     
     navigator.mediaDevices.removeEventListener = function(
-      type: string, 
+      _type: string, 
       _listener: EventListenerOrEventListenerObject, 
       _options?: boolean | EventListenerOptions
     ): void {
-      console.log(`[Camera Utils] Ignored event removal for: ${type}`);
+      // console.log(`[Camera Utils] Ignored event removal for: ${type}`);
       return;
     };
     
-    navigator.mediaDevices.dispatchEvent = function(event: Event): boolean {
-      console.log(`[Camera Utils] Ignored dispatchEvent for: ${event.type}`);
+    navigator.mediaDevices.dispatchEvent = function(_event: Event): boolean {
+      // console.log(`[Camera Utils] Ignored dispatchEvent for: ${event.type}`);
       return true;
     };
   }
   
   // Fix mediaDevices if it doesn't exist
   if (!navigator.mediaDevices) {
-    console.log('[Camera Utils] Adding missing mediaDevices object');
+    // console.log('[Camera Utils] Adding missing mediaDevices object');
     (navigator as any).mediaDevices = {};
   }
   
   // Fix getUserMedia if it doesn't exist
   if (!navigator.mediaDevices.getUserMedia) {
-    console.log('[Camera Utils] Adding getUserMedia polyfill');
+    // console.log('[Camera Utils] Adding getUserMedia polyfill');
     
     navigator.mediaDevices.getUserMedia = function(constraints: MediaStreamConstraints): Promise<MediaStream> {
-      console.log('[Camera Utils] Using getUserMedia polyfill');
+      // console.log('[Camera Utils] Using getUserMedia polyfill');
       
       // Try to use the legacy API if available
       const getUserMedia = 
@@ -129,7 +125,7 @@ export const initializeCamera = async (audioAlso = false): Promise<boolean> => {
   
   // If we're on HTTP, patch getUserMedia for better iOS compatibility
   if (window.location.protocol === 'http:') {
-    console.log('[Camera Utils] Applying HTTP-specific camera fixes');
+    // console.log('[Camera Utils] Applying HTTP-specific camera fixes');
     
     // Store the original implementation
     const originalGetUserMedia = navigator.mediaDevices.getUserMedia;
@@ -138,14 +134,14 @@ export const initializeCamera = async (audioAlso = false): Promise<boolean> => {
     navigator.mediaDevices.getUserMedia = async function(
       constraints: MediaStreamConstraints
     ): Promise<MediaStream> {
-      console.log('[Camera Utils] Using enhanced getUserMedia for HTTP');
+      //console.log('[Camera Utils] Using enhanced getUserMedia for HTTP');
       
       // Create a more iOS-friendly constraint object
       const newConstraints = {...constraints};
       
       // Fix video constraints
       if (newConstraints.video === true) {
-        console.log('[Camera Utils] Expanding basic video constraints');
+        //console.log('[Camera Utils] Expanding basic video constraints');
         newConstraints.video = {
           facingMode: 'user',
           width: { ideal: 640 },
@@ -167,7 +163,7 @@ export const initializeCamera = async (audioAlso = false): Promise<boolean> => {
         
         // Special handling for HTTP on iOS - try with minimal constraints
         try {
-          console.log('[Camera Utils] Trying fallback with minimal constraints');
+          //console.log('[Camera Utils] Trying fallback with minimal constraints');
           const minimalConstraints: MediaStreamConstraints = {
             video: {
               facingMode: 'user',
@@ -194,5 +190,5 @@ export const initializeCamera = async (audioAlso = false): Promise<boolean> => {
     );
   }
   
-  console.log('[Camera Utils] iOS fixes applied successfully');
+  //console.log('[Camera Utils] iOS fixes applied successfully');
 })();

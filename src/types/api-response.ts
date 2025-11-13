@@ -1,4 +1,4 @@
-import { CallType, StreamFundingType, StreamSessionType, UserType, Agenda } from "./stream";
+import { CallType, StreamFundingType, StreamSessionType, UserType, Agenda, AgendaAction } from "./stream";
 import { Tenant } from "./tenant";
 
 export interface TenantResponse {
@@ -68,27 +68,94 @@ export interface RecordingStopResponse {
   recordLink?: string;
 }
 
-// {
-//     "tenant": {
-//       "id": "cm9rmd95k000001j3jz3x7n75",
-//       "name": null,
-//       "theme": null,
-//       "primaryColor": null,
-//       "secondaryColor": null,
-//       "logo": null,
-//       "templateId": null,
-//       "rpcEndpoint": null,
-//       "networkCluster": null,
-//       "creatorWallet": "9XAyBX199vN6dA14jKz6T5BpVvZPr31DmSDUdDfPuVaq",
-//       "createdAt": "2025-04-21T22:00:07.831Z",
-//       "updatedAt": "2025-04-21T22:00:07.831Z",
-//       "defaultStreamType": "Meeting",
-//       "defaultFundingType": "Live",
-//       "enabledStreamTypes": {
-//         "enableStream": true,
-//         "enableMeeting": true,
-//         "enablePodcast": false
-//       },
-//       "authorizedDomains": []
-//     }
-//   }
+export type StreamAgenda = {
+  id: string;
+  timeStamp: number;
+  action: AgendaAction;
+  title: string | null;
+  description: string | null;
+  duration: string | null;
+  isCompleted: boolean;
+  hasContent?: boolean;
+  pollContent?: { id: string };
+  quizContent?: { id: string };
+  qaContent?: { id: string };
+  customContent?: { id: string };
+};
+
+export type PaginationInfo = {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+};
+
+export type StreamAgendaResponse = {
+  agendas: StreamAgenda[];
+  pagination: PaginationInfo;
+};
+
+// Response from createAgenda (simplified)
+export type CreatedAgenda = {
+  id: string;
+  timeStamp: number;
+  action: AgendaAction;
+  title: string | null;
+  description: string | null;
+};
+
+// Response from getAgendaById (simplified)
+export type SimpleAgenda = {
+  id: string;
+  streamId: string;
+  timeStamp: number;
+  action: AgendaAction;
+  title: string | null;
+  description: string | null;
+  duration: string | null;
+  isCompleted: boolean;
+};
+
+// Response from updateStreamAgenda (full content)
+export type UpdatedAgenda = {
+  id: string;
+  streamId: string;
+  timeStamp: number;
+  action: AgendaAction;
+  title: string | null;
+  description: string | null;
+  duration: string | null;
+  isCompleted: boolean;
+  tenantId: string;
+  pollContent?: {
+    id: string;
+    options: string[];
+    totalVotes: number;
+  };
+  quizContent?: {
+    id: string;
+    questions: Array<{
+      id: string;
+      questionText: string;
+      options: string[];
+      correctAnswer: string;
+      isMultiChoice: boolean;
+      points: number;
+    }>;
+  };
+  qaContent?: {
+    id: string;
+    topic: string | null;
+  };
+  customContent?: {
+    id: string;
+    customData: Record<string, unknown> | null;
+  };
+};
+
+// Response from deleteAgenda
+export type DeleteAgendaResponse = {
+  message: string;
+  deletedId: string;
+  livestreamId: string;
+};

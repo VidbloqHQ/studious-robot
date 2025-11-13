@@ -1,4 +1,3 @@
-import { useWebSocket } from "../hooks";
 import { ApiClient } from "../utils";
 
 export type Tenant = {
@@ -28,8 +27,11 @@ export type Tenant = {
 export type TenantContextType = {
   apiKey: string;
   apiSecret: string;
-  websocket: ReturnType<typeof useWebSocket>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  websocket: any | null; // WebSocket connection or manager
   isConnected: boolean;
+  fetchTenantData: () => Promise<void>;
+  isWebSocketInitialized: boolean; // Added to track if WebSocket has been initialized
   connect: () => Promise<void>;
   disconnect: () => void;
   apiClient: ApiClient;

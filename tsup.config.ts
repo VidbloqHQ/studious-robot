@@ -6,7 +6,7 @@ export default defineConfig({
   dts: true, // Generate .d.ts files
   tsconfig: 'tsconfig.app.json',
   splitting: false,
-  sourcemap: true, // Optional: Generate sourcemaps
+  sourcemap: false, // Optional: Generate sourcemaps
   clean: true, // Clear the output directory before building
   external: ['react', 'react-dom'], // Externalize React and ReactDOM
   treeshake: true,

@@ -49,6 +49,7 @@ export type IconName =
   | "loading"
   | "list"
   | "grid"
+  | "userMinus"
   | "link";
 
 export type IconPathsType = {

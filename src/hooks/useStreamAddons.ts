@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
-import { AddonType, AddonState, ActiveAddons } from "../types/index"
+import { AddonType, AddonState, ActiveAddons } from "../types/index";
 import { useStreamContext } from "./useStreamContext";
-
+import { useTenantContext } from "./useTenantContext";
 
 // Type guard to validate addon types
 function isValidAddonType(type: string): type is AddonType {
@@ -10,16 +10,17 @@ function isValidAddonType(type: string): type is AddonType {
 
 export const useStreamAddons = () => {
   const { websocket } = useStreamContext();
+  const { isConnected } = useTenantContext();
   
   const [activeAddons, setActiveAddons] = useState<ActiveAddons>({
     Custom: { type: "Custom", isActive: false },
     "Q&A": { type: "Q&A", isActive: false },
     Poll: { type: "Poll", isActive: false },
-    Quiz: { type: "Quiz", isActive: false }, // Added Quiz addon
+    Quiz: { type: "Quiz", isActive: false },
   });
 
   useEffect(() => {
-    if (!websocket || !websocket.isConnected) return;
+    if (!websocket) return;
 
     // Handle initial addon state
     const handleAddonState = (addons: ActiveAddons) => {
@@ -50,13 +51,13 @@ export const useStreamAddons = () => {
 
   // Functions to control addons
   const startAddon = <T>(type: AddonType, data?: T) => {
-    if (websocket && websocket.isConnected) {
+    if (websocket && isConnected) {
       websocket.startAddon(type, data);
     }
   };
 
   const stopAddon = (type: AddonType) => {
-    if (websocket && websocket.isConnected) {
+    if (websocket && isConnected) {
       websocket.stopAddon(type);
     }
   };

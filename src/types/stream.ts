@@ -2,7 +2,7 @@
 import { TrackReference } from "@livekit/components-react";
 
 import { LocalParticipant, RemoteParticipant } from "livekit-client";
-import { useWebSocket } from "../hooks";
+
 
 // Most of these types will change based on the new schema type. e.g there is no AgendaDetails model anymore
 export type StreamScheduleType = "instant" | "scheduled";
@@ -96,57 +96,57 @@ export type AgendaItem =
   | QAAgendaItem
   | CustomAgendaItem;
 
-type PollContent = {
-  id: string;
-  options: string[];
-  totalVotes: number;
-}
+// type PollContent = {
+//   id: string;
+//   options: string[];
+//   totalVotes: number;
+// }
 
-type QuizContent = {
-  id: string;
-  questions: {
-    id: string;
-    questionText: string;
-    options: string[];
-    correctAnswer: string;
-    isMultiChoice: boolean;
-    points: number;
-  }[];
-}
+// type QuizContent = {
+//   id: string;
+//   questions: {
+//     id: string;
+//     questionText: string;
+//     options: string[];
+//     correctAnswer: string;
+//     isMultiChoice: boolean;
+//     points: number;
+//   }[];
+// }
 
-type AssetTransferContent = {
-  id: string;
-  assetType: string;
-  transferType: string;
-}
+// type AssetTransferContent = {
+//   id: string;
+//   assetType: string;
+//   transferType: string;
+// }
 
-type QAContent ={
-  id: string;
-  topic: string | null;
-}
+// type QAContent ={
+//   id: string;
+//   topic: string | null;
+// }
 
-type CustomContent = {
-  id: string;
-  customData: Record<string, unknown> | null;
-}
+// type CustomContent = {
+//   id: string;
+//   customData: Record<string, unknown> | null;
+// }
 
 // Response type
-export type Agenda  = {
-  id: string;
-  streamId: string;
-  isCompleted: boolean;
-  timeStamp: number;
-  action: AgendaAction;
-  title: string | null;
-  description: string | null;
-  duration: string | null;
-  tenantId: string;
-  pollContent?: PollContent;
-  quizContent?: QuizContent;
-  assetTransferContent?: AssetTransferContent;
-  qaContent?: QAContent;
-  customContent?: CustomContent;
-}
+// export type Agenda  = {
+//   id: string;
+//   streamId: string;
+//   isCompleted: boolean;
+//   timeStamp: number;
+//   action: AgendaAction;
+//   title: string | null;
+//   description: string | null;
+//   duration: string | null;
+//   tenantId: string;
+//   pollContent?: PollContent;
+//   quizContent?: QuizContent;
+//   assetTransferContent?: AssetTransferContent;
+//   qaContent?: QAContent;
+//   customContent?: CustomContent;
+// }
 
 export interface AgendaUpdate {
   wallet: string;
@@ -195,6 +195,7 @@ export type StreamMetadata = {
   callType: string;
   streamSessionType: string;
   creatorWallet: string;
+  streamId: string;
   hasHost?: boolean;
   name?: string;
 };
@@ -308,7 +309,7 @@ export interface CallControlPlugin {
 }
 
 export type CallControlContext = {
-  websocket: ReturnType<typeof useWebSocket>;
+  websocket: any | null;
   roomName: string;
   identity: string;
   userType: UserType;
@@ -388,4 +389,36 @@ export type CallControlsRenderProps = {
   // Plugin states
   pluginStates?: Record<string, any>;
   pluginHandlers?: Record<string, Record<string, () => void>>;
+};
+
+// Add these new types to your types/index.ts file
+
+// export type PaginationInfo = {
+//   page: number;
+//   limit: number;
+//   total: number;
+//   totalPages: number;
+// };
+
+// export type StreamAgendaResponse = {
+//   agendas: Agenda[];
+//   pagination: PaginationInfo;
+// };
+
+// Update your existing Agenda type
+export type Agenda = {
+  id: string;
+  timeStamp: number;
+  action: AgendaAction;
+  title: string | null;
+  description: string | null;
+  duration: string | null;
+  isCompleted: boolean;
+  hasContent?: boolean; // Added based on controller mapping
+  // Content references - now only returning IDs from the optimized query
+  pollContent?: { id: string };
+  quizContent?: { id: string };
+  qaContent?: { id: string };
+  customContent?: { id: string };
+  // Note: removed streamId and tenantId as they're not returned by the controller
 };

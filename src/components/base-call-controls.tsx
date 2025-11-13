@@ -7,6 +7,7 @@ import {
   useHandleStreamDisconnect,
   useRequirePublicKey,
   useNotification,
+  useTenantContext,
 } from "../hooks";
 import {
   BaseCallControlsProps,
@@ -81,6 +82,8 @@ const BaseCallControls = ({
     setUserType,
   } = useStreamContext();
 
+  const { isConnected } = useTenantContext(); // Get connection state from tenant context
+
   const canAccessMediaControls =
     userType === "host" || userType === "co-host" || isInvited;
   const isGuest = userType === "guest";
@@ -93,7 +96,6 @@ const BaseCallControls = ({
   const room = useRoomContext();
 
   // Refs to track state and prevent duplicates
-  const wsSetupCompleteRef = useRef(false);
   const roomJoinedRef = useRef(false);
   const identityRef = useRef<string | null>(null);
   const guestRequestsRef = useRef<GuestRequest[]>([]);
@@ -235,7 +237,7 @@ const BaseCallControls = ({
   // Join room ONCE when we have all requirements
   useEffect(() => {
     if (
-      !websocket?.isConnected ||
+      !isConnected ||
       !roomName ||
       !identityRef.current ||
       roomJoinedRef.current
@@ -244,7 +246,7 @@ const BaseCallControls = ({
     }
 
     setIsConnecting(true);
-    websocket.joinRoom(roomName, identityRef.current);
+    websocket.joinRoom(roomName, identityRef.current, publicKey?.toString());
     roomJoinedRef.current = true;
     setIsConnecting(false);
 
@@ -254,14 +256,14 @@ const BaseCallControls = ({
         websocket.sendMessage("getGuestRequests", { roomName });
       }, 1000);
     }
-  }, [websocket?.isConnected, roomName, userType]);
+  }, [isConnected, roomName, userType, websocket]);
 
   // Send periodic activity signals
   useEffect(() => {
-    if (!identityRef.current || !roomName || !websocket?.isConnected) return;
+    if (!identityRef.current || !roomName || !isConnected) return;
 
     const sendActivity = () => {
-      if (websocket.isConnected && identityRef.current) {
+      if (isConnected && identityRef.current) {
         try {
           websocket.sendMessage("participantActive", {
             participantId: identityRef.current,
@@ -281,14 +283,11 @@ const BaseCallControls = ({
       clearTimeout(initialTimer);
       clearInterval(intervalId);
     };
-  }, [websocket?.isConnected, roomName]);
+  }, [isConnected, roomName, websocket]);
 
-  // Set up WebSocket event handlers ONCE
+  // Set up WebSocket event handlers
   useEffect(() => {
-    if (!websocket || wsSetupCompleteRef.current || !identityRef.current)
-      return;
-
-    wsSetupCompleteRef.current = true;
+    if (!websocket || !identityRef.current) return;
 
     const handleInviteGuest = (data: {
       participantId: string;
@@ -356,23 +355,27 @@ const BaseCallControls = ({
       }
     };
 
+    // Handle connection state changes
+    const handleConnectionChange = () => {
+      if (isConnected) {
+        roomJoinedRef.current = false; // Reset to rejoin room
+      }
+    };
+
     websocket.addEventListener("inviteGuest", handleInviteGuest);
     websocket.addEventListener("returnToGuest", handleReturnToGuest);
-    websocket.addEventListener(
-      "guestRequestsUpdate",
-      handleGuestRequestsUpdate
-    );
+    websocket.addEventListener("guestRequestsUpdate", handleGuestRequestsUpdate);
     websocket.addEventListener("newToken", handleNewToken);
+    websocket.addEventListener("connected", handleConnectionChange);
+    websocket.addEventListener("disconnected", handleConnectionChange);
 
     return () => {
       websocket.removeEventListener("inviteGuest", handleInviteGuest);
       websocket.removeEventListener("returnToGuest", handleReturnToGuest);
-      websocket.removeEventListener(
-        "guestRequestsUpdate",
-        handleGuestRequestsUpdate
-      );
+      websocket.removeEventListener("guestRequestsUpdate", handleGuestRequestsUpdate);
       websocket.removeEventListener("newToken", handleNewToken);
-      wsSetupCompleteRef.current = false;
+      websocket.removeEventListener("connected", handleConnectionChange);
+      websocket.removeEventListener("disconnected", handleConnectionChange);
     };
   }, [
     websocket,
@@ -382,22 +385,8 @@ const BaseCallControls = ({
     room,
     onReturnToGuest,
     setUserType,
+    isConnected,
   ]);
-
-  // Handle WebSocket reconnection
-  useEffect(() => {
-    if (!websocket) return;
-
-    const handleWebSocketConnect = () => {
-      roomJoinedRef.current = false;
-      wsSetupCompleteRef.current = false;
-    };
-
-    window.addEventListener("connect", handleWebSocketConnect);
-    return () => {
-      window.removeEventListener("connect", handleWebSocketConnect);
-    };
-  }, [websocket]);
 
   // Update guest requests from context
   useEffect(() => {
@@ -414,7 +403,7 @@ const BaseCallControls = ({
   const lowerHand = useCallback(() => {
     if (
       !features.handRaise ||
-      !websocket?.isConnected ||
+      !isConnected ||
       !identityRef.current
     ) {
       console.warn(
@@ -431,7 +420,7 @@ const BaseCallControls = ({
       message: "Hand lowered",
       duration: 2000,
     });
-  }, [websocket, roomName, addNotification, features.handRaise, onHandLowered]);
+  }, [websocket, roomName, addNotification, features.handRaise, onHandLowered, isConnected]);
 
   // Monitor track states
   const updateTrackStates = useCallback(() => {
@@ -535,7 +524,7 @@ const BaseCallControls = ({
   const requestToSpeak = useCallback(() => {
     if (
       !features.guestRequests ||
-      !websocket?.isConnected ||
+      !isConnected ||
       !identityRef.current ||
       !publicKey
     ) {
@@ -562,13 +551,14 @@ const BaseCallControls = ({
     getDisplayName,
     onRaiseHand,
     features.guestRequests,
+    isConnected,
   ]);
 
   // Raise hand function for meetings
   const raiseHand = useCallback(() => {
     if (
       !features.handRaise ||
-      !websocket?.isConnected ||
+      !isConnected ||
       !identityRef.current ||
       !publicKey ||
       !permissions.canRaiseHand
@@ -603,6 +593,7 @@ const BaseCallControls = ({
     addNotification,
     features.handRaise,
     onHandRaised,
+    isConnected,
   ]);
 
   const toggleMic = useCallback(() => {

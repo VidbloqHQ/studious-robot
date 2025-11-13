@@ -13,7 +13,11 @@ type VidbloqProviderProps = {
 };
 
 /**
- * This is Vidbloq parent component, every other component should be wrapped in this component.
+ * Optimized Vidbloq parent component with built-in request management
+ * Request configuration is handled internally to protect the SaaS infrastructure
+ * 
+ * The request manager initializes automatically when first used by any hook,
+ * with internal rate limiting and caching configuration to prevent API overload.
  */
 const VidbloqProvider = ({
   children,

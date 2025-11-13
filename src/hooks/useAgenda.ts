@@ -1,11 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { useState } from "react";
+import { useState, useCallback, useRef } from "react";
 import { useTenantContext } from "./useTenantContext";
-import {
-  Agenda,
-  AgendaItem,
-  AgendaUpdate,
-} from "../types/index";
+import { Agenda, AgendaItem, AgendaUpdate, CreatedAgenda, PaginationInfo, SimpleAgenda, StreamAgendaResponse, UpdatedAgenda } from "../types/index";
+import { getRequestManager } from "../utils/index";
 
 interface CreateAgendaRequest {
   streamId: string;
@@ -14,32 +11,23 @@ interface CreateAgendaRequest {
 }
 
 interface UseCreateAgendaReturn {
-  createAgenda: (data: CreateAgendaRequest) => Promise<Agenda[] | null>;
+  createAgenda: (data: CreateAgendaRequest) => Promise<CreatedAgenda[] | null>;
   isLoading: boolean;
   error: Error | null;
-  agendas: Agenda[] | null;
+  agendas: CreatedAgenda[] | null;
 }
 
-/**
- * Hook for creating agenda items for a stream
- * @returns Object containing createAgenda function, loading state, error state, and created agendas
- */
 export const useCreateAgenda = (): UseCreateAgendaReturn => {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<Error | null>(null);
-  const [agendas, setAgendas] = useState<Agenda[] | null>(null);
-
-  // Get the API client from context
+  const [agendas, setAgendas] = useState<CreatedAgenda[] | null>(null);
+  
   const { apiClient } = useTenantContext();
+  const requestManager = getRequestManager();
 
-  /**
-   * Create new agenda items for a stream
-   * @param data - Agenda creation request data
-   * @returns Created agendas or null if an error occurred
-   */
   const createAgenda = async (
     data: CreateAgendaRequest
-  ): Promise<Agenda[] | null> => {
+  ): Promise<CreatedAgenda[] | null> => {
     if (!data.streamId) {
       setError(new Error("Stream ID is required"));
       return null;
@@ -50,11 +38,7 @@ export const useCreateAgenda = (): UseCreateAgendaReturn => {
       return null;
     }
 
-    if (
-      !data.agendas ||
-      !Array.isArray(data.agendas) ||
-      data.agendas.length === 0
-    ) {
+    if (!data.agendas || !Array.isArray(data.agendas) || data.agendas.length === 0) {
       setError(new Error("At least one agenda item is required"));
       return null;
     }
@@ -63,20 +47,28 @@ export const useCreateAgenda = (): UseCreateAgendaReturn => {
     setError(null);
 
     try {
-      // Use the API client to make the POST request to the /stream/:streamId/agenda endpoint
-      const createdAgendas = await apiClient.post<Agenda[]>(
-        `/agenda/${data.streamId}`,
+      const createdAgendas = await requestManager.execute<CreatedAgenda[]>(
+        `agenda:create:${data.streamId}:${Date.now()}`,
+        async () => apiClient.post<CreatedAgenda[]>(
+          `/agenda/${data.streamId}`,
+          {
+            agendas: data.agendas,
+            wallet: data.wallet,
+          }
+        ),
         {
-          agendas: data.agendas,
-          wallet: data.wallet,
+          skipCache: true,
+          rateLimitType: 'agenda'
         }
       );
 
+      // Invalidate cache for this stream's agendas
+      requestManager.invalidate(`agenda:stream:${data.streamId}`);
+      
       setAgendas(createdAgendas);
       return createdAgendas;
     } catch (err: any) {
-      const errorMessage =
-        err.response?.data?.error || "An unknown error occurred";
+      const errorMessage = err.response?.data?.error || err.message || "An unknown error occurred";
       setError(new Error(errorMessage));
       return null;
     } finally {
@@ -92,33 +84,34 @@ export const useCreateAgenda = (): UseCreateAgendaReturn => {
   };
 };
 
+
+
+
 interface UseGetStreamAgendaReturn {
-  getStreamAgenda: (streamId: string) => Promise<Agenda[] | null>;
+  getStreamAgenda: (streamId: string, page?: number, limit?: number) => Promise<StreamAgendaResponse | null>;
   isLoading: boolean;
   error: Error | null;
   agendas: Agenda[] | null;
+  pagination: PaginationInfo | null;
+  refresh: (streamId: string, page?: number, limit?: number) => Promise<StreamAgendaResponse | null>;
 }
 
-/**
- * Hook for fetching all agenda items for a stream
- * @returns Object containing getStreamAgenda function, loading state, error state, and fetched agendas
- */
 export const useGetStreamAgenda = (): UseGetStreamAgendaReturn => {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<Error | null>(null);
   const [agendas, setAgendas] = useState<Agenda[] | null>(null);
-
-  // Get the API client from context
+  const [pagination, setPagination] = useState<PaginationInfo | null>(null);
+  
   const { apiClient } = useTenantContext();
+  const requestManager = getRequestManager();
+  const lastStreamIdRef = useRef<string | null>(null);
 
-  /**
-   * Fetch all agenda items for a stream
-   * @param streamId - ID of the stream
-   * @returns Fetched agendas or null if an error occurred
-   */
-  const getStreamAgenda = async (
-    streamId: string
-  ): Promise<Agenda[] | null> => {
+  const fetchAgendas = useCallback(async (
+    streamId: string,
+    page = 1,
+    limit = 20,
+    forceRefresh = false
+  ): Promise<StreamAgendaResponse | null> => {
     if (!streamId) {
       setError(new Error("Stream ID is required"));
       return null;
@@ -126,33 +119,72 @@ export const useGetStreamAgenda = (): UseGetStreamAgendaReturn => {
 
     setIsLoading(true);
     setError(null);
+    lastStreamIdRef.current = streamId;
+
+    const cacheKey = `agenda:stream:${streamId}:${page}:${limit}`;
 
     try {
-      // Use the API client to make the GET request to the /stream/:streamId/agenda endpoint
-      const fetchedAgendas = await apiClient.get<Agenda[]>(
-        `/agenda/${streamId}`
+      const response = await requestManager.execute<StreamAgendaResponse>(
+        cacheKey,
+        async () => {
+          const params = new URLSearchParams();
+          params.append('page', page.toString());
+          params.append('limit', limit.toString());
+          
+          return apiClient.get<StreamAgendaResponse>(
+            `/agenda/stream/${streamId}?${params.toString()}`
+          );
+        },
+        {
+          cacheType: 'agenda',
+          forceRefresh,
+          rateLimitType: 'agenda',
+        }
       );
 
-      setAgendas(fetchedAgendas);
-      return fetchedAgendas;
+      setAgendas(response.agendas);
+      setPagination(response.pagination);
+      return response;
     } catch (err: any) {
-      const errorMessage =
-        err.response?.data?.error || "An unknown error occurred";
+      // Return cached data on rate limit
+      if (err.message?.includes('Rate limit exceeded') && agendas && pagination) {
+        console.warn('Rate limit hit for agenda fetch, using cached data');
+        return { agendas, pagination };
+      }
+      
+      const errorMessage = err.response?.data?.error || err.message || "An unknown error occurred";
       setError(new Error(errorMessage));
       return null;
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [apiClient, requestManager, agendas, pagination]);
+
+  const getStreamAgenda = useCallback((
+    streamId: string, 
+    page?: number, 
+    limit?: number
+  ) => {
+    return fetchAgendas(streamId, page, limit, false);
+  }, [fetchAgendas]);
+
+  const refresh = useCallback((
+    streamId: string, 
+    page?: number, 
+    limit?: number
+  ) => {
+    return fetchAgendas(streamId, page, limit, true);
+  }, [fetchAgendas]);
 
   return {
     getStreamAgenda,
     isLoading,
     error,
     agendas,
+    pagination,
+    refresh,
   };
 };
-
 
 interface DeleteAgendaResponse {
   message: string;
@@ -161,33 +193,20 @@ interface DeleteAgendaResponse {
 }
 
 interface UseDeleteAgendaReturn {
-  deleteAgenda: (
-    agendaId: string,
-    wallet: string
-  ) => Promise<DeleteAgendaResponse | null>;
+  deleteAgenda: (agendaId: string, wallet: string) => Promise<DeleteAgendaResponse | null>;
   isLoading: boolean;
   error: Error | null;
   response: DeleteAgendaResponse | null;
 }
 
-/**
- * Hook for deleting an agenda item
- * @returns Object containing deleteAgenda function, loading state, error state, and delete response
- */
 export const useDeleteAgenda = (): UseDeleteAgendaReturn => {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<Error | null>(null);
   const [response, setResponse] = useState<DeleteAgendaResponse | null>(null);
-
-  // Get the API client from context
+  
   const { apiClient } = useTenantContext();
+  const requestManager = getRequestManager();
 
-  /**
-   * Delete an agenda item
-   * @param agendaId - ID of the agenda to delete
-   * @param wallet - Wallet address of the user making the request
-   * @returns Delete response or null if an error occurred
-   */
   const deleteAgenda = async (
     agendaId: string,
     wallet: string
@@ -206,15 +225,24 @@ export const useDeleteAgenda = (): UseDeleteAgendaReturn => {
     setError(null);
 
     try {
-      const deleteResponse = await apiClient.delete<DeleteAgendaResponse>(
-        `/agenda/${agendaId}/${wallet}`
+      const deleteResponse = await requestManager.execute<DeleteAgendaResponse>(
+        `agenda:delete:${agendaId}:${Date.now()}`,
+        async () => apiClient.delete<DeleteAgendaResponse>(
+          `/agenda/${agendaId}/${wallet}`
+        ),
+        {
+          skipCache: true,
+          rateLimitType: 'agenda'
+        }
       );
 
+      // Invalidate related caches
+      requestManager.invalidate(`agenda:`);
+      
       setResponse(deleteResponse);
       return deleteResponse;
     } catch (err: any) {
-      const errorMessage =
-        err.response?.data?.error || "An unknown error occurred";
+      const errorMessage = err.response?.data?.error || err.message || "An unknown error occurred";
       setError(new Error(errorMessage));
       return null;
     } finally {
@@ -232,31 +260,24 @@ export const useDeleteAgenda = (): UseDeleteAgendaReturn => {
 
 
 interface UseUpdateStreamAgendaReturn {
-  updateStreamAgenda: (agendaId: string, data: AgendaUpdate) => Promise<Agenda | null>;
+  updateStreamAgenda: (agendaId: string, data: AgendaUpdate) => Promise<UpdatedAgenda | null>;
   isLoading: boolean;
   error: Error | null;
-  agenda: Agenda | null;
+  agenda: UpdatedAgenda | null;
 }
 
-/**
- * Hook for updating a stream agenda item
- * @returns Object containing updateStreamAgenda function, loading state, error state, and updated agenda
- */
 export const useUpdateStreamAgenda = (): UseUpdateStreamAgendaReturn => {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<Error | null>(null);
-  const [agenda, setAgenda] = useState<Agenda | null>(null);
+  const [agenda, setAgenda] = useState<UpdatedAgenda | null>(null);
   
-  // Get the API client from context
   const { apiClient } = useTenantContext();
+  const requestManager = getRequestManager();
 
-  /**
-   * Update a stream agenda item
-   * @param agendaId - ID of the agenda to update
-   * @param data - Agenda update data
-   * @returns Updated agenda or null if an error occurred
-   */
-  const updateStreamAgenda = async (agendaId: string, data: AgendaUpdate): Promise<Agenda | null> => {
+  const updateStreamAgenda = async (
+    agendaId: string, 
+    data: AgendaUpdate
+  ): Promise<UpdatedAgenda | null> => {
     if (!agendaId) {
       setError(new Error('Agenda ID is required'));
       return null;
@@ -271,8 +292,17 @@ export const useUpdateStreamAgenda = (): UseUpdateStreamAgendaReturn => {
     setError(null);
     
     try {
-      // Use the API client to make the PUT request to the /agenda/:agendaId endpoint
-      const updatedAgenda = await apiClient.put<Agenda>(`/agenda/${agendaId}`, data);
+      const updatedAgenda = await requestManager.execute<UpdatedAgenda>(
+        `agenda:update:${agendaId}:${Date.now()}`,
+        async () => apiClient.put<UpdatedAgenda>(`/agenda/${agendaId}`, data),
+        {
+          skipCache: true,
+          rateLimitType: 'agenda'
+        }
+      );
+      
+      // Invalidate related caches
+      requestManager.invalidate(`agenda:`);
       
       setAgenda(updatedAgenda);
       return updatedAgenda;
@@ -290,5 +320,80 @@ export const useUpdateStreamAgenda = (): UseUpdateStreamAgendaReturn => {
     isLoading,
     error,
     agenda,
+  };
+};
+
+interface UseGetAgendaDetailsReturn {
+  getAgenda: (agendaId: string) => Promise<SimpleAgenda | null>;
+  isLoading: boolean;
+  error: Error | null;
+  agenda: SimpleAgenda | null;
+  refresh: (agendaId: string) => Promise<SimpleAgenda | null>;
+}
+
+export const useGetAgendaDetails = (): UseGetAgendaDetailsReturn => {
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [error, setError] = useState<Error | null>(null);
+  const [agenda, setAgenda] = useState<SimpleAgenda | null>(null);
+  
+  const { apiClient } = useTenantContext();
+  const requestManager = getRequestManager();
+
+  const fetchAgenda = useCallback(async (
+    agendaId: string,
+    forceRefresh = false
+  ): Promise<SimpleAgenda | null> => {
+    if (!agendaId) {
+      setError(new Error("Agenda ID is required"));
+      return null;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    const cacheKey = `agenda:${agendaId}`;
+
+    try {
+      const fetchedAgenda = await requestManager.execute<SimpleAgenda>(
+        cacheKey,
+        async () => apiClient.get<SimpleAgenda>(`/agenda/${agendaId}`),
+        {
+          cacheType: 'agenda',
+          forceRefresh,
+          rateLimitType: 'agenda',
+        }
+      );
+
+      setAgenda(fetchedAgenda);
+      return fetchedAgenda;
+    } catch (err: any) {
+      // Return cached data on rate limit
+      if (err.message?.includes('Rate limit exceeded') && agenda) {
+        console.warn('Rate limit hit for agenda fetch, using cached data');
+        return agenda;
+      }
+      
+      const errorMessage = err.response?.data?.error || err.message || "An unknown error occurred";
+      setError(new Error(errorMessage));
+      return null;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [apiClient, requestManager, agenda]);
+
+  const getAgenda = useCallback((agendaId: string) => {
+    return fetchAgenda(agendaId, false);
+  }, [fetchAgenda]);
+
+  const refresh = useCallback((agendaId: string) => {
+    return fetchAgenda(agendaId, true);
+  }, [fetchAgenda]);
+
+  return {
+    getAgenda,
+    isLoading,
+    error,
+    agenda,
+    refresh,
   };
 };

@@ -102,13 +102,13 @@ export const useDownloadParticipants = () => {
   return { downloadParticipants, isDownloading, error };
 };
 
-
 interface NotificationOptions {
   showJoinNotifications?: boolean;
   showLeaveNotifications?: boolean;
   joinNotificationDuration?: number;
   leaveNotificationDuration?: number;
-  batchDelay?: number; // New option for batching
+  batchDelay?: number;
+  groupingWindow?: number; // Extended window for grouping notifications
 }
 
 export const useParticipantNotifications = (options: NotificationOptions = {}) => {
@@ -117,21 +117,26 @@ export const useParticipantNotifications = (options: NotificationOptions = {}) =
     showLeaveNotifications = true,
     joinNotificationDuration = 4000,
     leaveNotificationDuration = 3000,
-    batchDelay = 500, // Batch notifications within 500ms
+    batchDelay = 500,
+    groupingWindow = 3000, // Group notifications within 3 seconds
   } = options;
 
-  const { participants, userType } = useStreamContext();
+  const { participants, userType, token, isLoadingParticipants } = useStreamContext();
   const { addNotification } = useNotification();
 
   // Refs for state tracking
   const participantsMapRef = useRef<Map<string, Participant>>(new Map());
-  const lastParticipantIdsRef = useRef<Set<string>>(new Set());
-  const isFirstRunRef = useRef(true);
+  const previousParticipantIdsRef = useRef<Set<string>>(new Set());
+  const baselineParticipantsRef = useRef<Set<string> | null>(null);
+  const hasBaselineRef = useRef(false);
+  const hasSeenFirstLoadRef = useRef(false);
   
-  // Batching refs - now storing participant data
+  // Batching refs
   const pendingJoinsRef = useRef<Map<string, Participant>>(new Map());
   const pendingLeavesRef = useRef<Map<string, Participant>>(new Map());
   const batchTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const lastNotificationTimeRef = useRef<number>(0);
+  const extendedBatchTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Process batched notifications
   const processBatchedNotifications = useCallback(() => {
@@ -161,6 +166,8 @@ export const useParticipantNotifications = (options: NotificationOptions = {}) =
           message,
           duration: joinNotificationDuration,
         });
+        
+        lastNotificationTimeRef.current = Date.now();
       }
       
       pendingJoinsRef.current.clear();
@@ -192,48 +199,99 @@ export const useParticipantNotifications = (options: NotificationOptions = {}) =
           message,
           duration: leaveNotificationDuration,
         });
+        
+        lastNotificationTimeRef.current = Date.now();
       }
       
       pendingLeavesRef.current.clear();
     }
 
     batchTimerRef.current = null;
+    extendedBatchTimerRef.current = null;
   }, [userType, showJoinNotifications, showLeaveNotifications, 
       joinNotificationDuration, leaveNotificationDuration, addNotification]);
 
-  // Schedule batch processing
+  // Schedule batch processing with extended grouping window
   const scheduleBatch = useCallback(() => {
+    const now = Date.now();
+    const timeSinceLastNotification = now - lastNotificationTimeRef.current;
+    
+    // Clear existing timers
     if (batchTimerRef.current) {
       clearTimeout(batchTimerRef.current);
+      batchTimerRef.current = null;
+    }
+    if (extendedBatchTimerRef.current) {
+      clearTimeout(extendedBatchTimerRef.current);
+      extendedBatchTimerRef.current = null;
     }
     
-    batchTimerRef.current = setTimeout(() => {
-      processBatchedNotifications();
-    }, batchDelay);
-  }, [batchDelay, processBatchedNotifications]);
+    // If we're within the grouping window of a recent notification, use extended batching
+    if (timeSinceLastNotification < groupingWindow) {
+      // Wait for the full grouping window to expire before showing notification
+      const remainingTime = groupingWindow - timeSinceLastNotification;
+      extendedBatchTimerRef.current = setTimeout(() => {
+        processBatchedNotifications();
+      }, Math.max(remainingTime, batchDelay));
+    } else {
+      // Otherwise use normal batch delay
+      batchTimerRef.current = setTimeout(() => {
+        processBatchedNotifications();
+      }, batchDelay);
+    }
+  }, [batchDelay, groupingWindow, processBatchedNotifications]);
 
-  // Update participants map and detect changes
+  // Establish baseline after first successful load
   useEffect(() => {
-    const currentParticipantIds = new Set<string>();
-    const newParticipantsMap = new Map<string, Participant>();
+    // Wait for token and first load to complete
+    if (!isLoadingParticipants && !hasSeenFirstLoadRef.current && token) {
+      hasSeenFirstLoadRef.current = true;
+    }
     
-    participants.forEach(p => {
-      currentParticipantIds.add(p.id);
-      newParticipantsMap.set(p.id, p);
-    });
+    if (!hasBaselineRef.current && token && !isLoadingParticipants && hasSeenFirstLoadRef.current) {
+      
+      // Create baseline with current participants
+      const baseline = new Set<string>();
+      participants.forEach(p => {
+        baseline.add(p.id);
+        // Store participant data for future reference
+        participantsMapRef.current.set(p.id, p);
+        // Also add to previous participants so we don't notify for these
+        previousParticipantIdsRef.current.add(p.id);
+      });
+      
+      baselineParticipantsRef.current = baseline;
+      hasBaselineRef.current = true;
+    }
+  }, [token, participants, isLoadingParticipants]);
 
-    // Skip notifications on first run (initial load)
-    if (isFirstRunRef.current) {
-      lastParticipantIdsRef.current = currentParticipantIds;
-      participantsMapRef.current = newParticipantsMap;
-      isFirstRunRef.current = false;
+  // Monitor participant changes after baseline is established
+  useEffect(() => {
+    // Don't process until we have a baseline
+    if (!hasBaselineRef.current || !baselineParticipantsRef.current) {
       return;
     }
 
+    const currentParticipantIds = new Set<string>();
+    const currentParticipantsMap = new Map<string, Participant>();
+    
+    participants.forEach(p => {
+      currentParticipantIds.add(p.id);
+      currentParticipantsMap.set(p.id, p);
+      // Always update our stored participant data
+      participantsMapRef.current.set(p.id, p);
+    });
+
     // Detect new participants (joined)
     currentParticipantIds.forEach(id => {
-      if (!lastParticipantIdsRef.current.has(id)) {
-        const participant = newParticipantsMap.get(id);
+      const isInPrevious = previousParticipantIdsRef.current.has(id);
+      const isInBaseline = baselineParticipantsRef.current!.has(id);
+      
+      // Only notify if:
+      // 1. Not in previous state (just appeared)
+      // 2. Not in baseline (joined after us)
+      if (!isInPrevious && !isInBaseline) {
+        const participant = currentParticipantsMap.get(id);
         if (participant) {
           pendingJoinsRef.current.set(id, participant);
           scheduleBatch();
@@ -242,9 +300,9 @@ export const useParticipantNotifications = (options: NotificationOptions = {}) =
     });
 
     // Detect removed participants (left)
-    lastParticipantIdsRef.current.forEach(id => {
+    previousParticipantIdsRef.current.forEach(id => {
       if (!currentParticipantIds.has(id)) {
-        // Get participant data from our stored map
+        // Get participant info from our stored map (they were there before leaving)
         const participant = participantsMapRef.current.get(id);
         if (participant) {
           pendingLeavesRef.current.set(id, participant);
@@ -253,9 +311,8 @@ export const useParticipantNotifications = (options: NotificationOptions = {}) =
       }
     });
 
-    // Update refs for next comparison
-    lastParticipantIdsRef.current = currentParticipantIds;
-    participantsMapRef.current = newParticipantsMap;
+    // Update previous state for next comparison
+    previousParticipantIdsRef.current = currentParticipantIds;
 
   }, [participants, scheduleBatch]);
 
@@ -264,15 +321,25 @@ export const useParticipantNotifications = (options: NotificationOptions = {}) =
     return () => {
       if (batchTimerRef.current) {
         clearTimeout(batchTimerRef.current);
-        // Process any pending notifications before cleanup
-        processBatchedNotifications();
       }
+      if (extendedBatchTimerRef.current) {
+        clearTimeout(extendedBatchTimerRef.current);
+      }
+      // Process any pending notifications before cleanup
+      processBatchedNotifications();
+      
+      // Reset refs on unmount
+      hasBaselineRef.current = false;
+      baselineParticipantsRef.current = null;
+      hasSeenFirstLoadRef.current = false;
+      previousParticipantIdsRef.current.clear();
+      participantsMapRef.current.clear();
     };
   }, [processBatchedNotifications]);
 
   return {
     participantCount: participants.length,
-    isMonitoring: true
+    isMonitoring: hasBaselineRef.current
   };
 };
 
@@ -324,7 +391,7 @@ export const useParticipantControls = ({
   // Get required hooks
   const { participants } = useParticipantList();
   const { userType, roomName, streamMetadata, websocket } = useStreamContext();
-  const { apiClient } = useTenantContext();
+  const { apiClient, isConnected } = useTenantContext();
   const { publicKey } = useRequirePublicKey();
 
   // Track real-time states
@@ -403,7 +470,7 @@ export const useParticipantControls = ({
       };
     }
 
-    if (!websocket || !websocket.isConnected) {
+    if (!websocket || !isConnected) {
       return {
         success: false,
         error: "WebSocket not connected"
